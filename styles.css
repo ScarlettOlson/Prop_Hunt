@@ -1,0 +1,79 @@
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #000;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  color: #fff;
+}
+
+canvas {
+  display: block;
+}
+
+#hud {
+  position: fixed;
+  top: 10px; left: 10px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  z-index: 10;
+  background: rgba(0,0,0,0.4);
+  padding: 8px 12px;
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+}
+
+#hud .label { font-weight: 700; margin-right: 6px; }
+
+#overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(3px);
+  background: rgba(0,0,0,0.6);
+  z-index: 20;
+  text-align: center;
+}
+
+#overlay.show { display: flex; flex-direction: column; gap: 16px; }
+
+#message {
+  font-size: 1.4rem;
+  max-width: 70ch;
+  line-height: 1.4;
+}
+
+#controls {
+  position: fixed;
+  bottom: 12px; left: 12px; right: 12px;
+  display: flex;
+  justify-content: space-between;
+  z-index: 10;
+  pointer-events: auto;
+}
+
+.dpad { display: flex; flex-direction: column; gap: 8px; }
+.actions { display: flex; gap: 8px; align-items: center; }
+
+.btn {
+  background: #222;
+  color: #fff;
+  border: 1px solid #444;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+.btn:active { background: #444; }
+
+#modeToggle input { margin-right: 6px; }
+
+/* Mobile-friendly tap targets */
+@media (max-width: 768px) {
+  .btn { padding: 14px 18px; font-size: 1.1rem; }
+}
+
+/* Minimal focus for accessibility */
+.btn:focus-visible { outline: 2px solid #77f; }

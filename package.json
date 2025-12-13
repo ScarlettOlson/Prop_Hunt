@@ -1,0 +1,27 @@
+{
+  "dependencies": {
+    "three": "^0.182.0"
+  },
+  "name": "gp",
+  "version": "1.0.0",
+  "main": "index.js",
+  "devDependencies": {
+    "vite": "^7.2.7"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "vite"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ScarlettOlson/Prop_Hunt.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ScarlettOlson/Prop_Hunt/issues"
+  },
+  "homepage": "https://github.com/ScarlettOlson/Prop_Hunt#readme",
+  "description": ""
+}
