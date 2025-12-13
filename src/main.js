@@ -743,6 +743,14 @@ class Game {
     const ceilingMat = protoMat(0x5a5a5a); // Ceiling
     const doorMat = protoMat(0x4a3a2a); // Dark wood for door
     const noteMat = protoMat(0xddddcc);
+    const furnitureMat = protoMat(0x5a4a3a); // Brown furniture
+    const windowMat = new THREE.MeshStandardMaterial({ 
+      color: 0x99bbee, 
+      transparent: true, 
+      opacity: 0.3,
+      roughness: 0.1,
+      metalness: 0.1
+    });
 
     // House dimensions
     const houseWidth = 12;
@@ -781,18 +789,90 @@ class Game {
       return wall;
     };
 
-    // Front wall (with opening for entrance - we'll add door later)
-    createWall(houseWidth, wallHeight, wallThickness, 0, wallHeight/2, -houseDepth/2);
+    // Front wall (with door and windows)
+    const frontWallLeft = createWall(houseWidth/2 - 1.5, wallHeight, wallThickness, 
+      -houseWidth/4 - 0.75, wallHeight/2, -houseDepth/2 - wallThickness/2);
+    const frontWallRight = createWall(houseWidth/2 - 1.5, wallHeight, wallThickness, 
+      houseWidth/4 + 0.75, wallHeight/2, -houseDepth/2 - wallThickness/2);
+    
+    // Front door
+    const frontDoorFrame = new THREE.Group();
+    frontDoorFrame.position.set(0, wallHeight/2 - 0.5, -houseDepth/2 - wallThickness/2);
+    const doorFrameTop2 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.15, 0.1), wallMat);
+    doorFrameTop2.position.set(0, 1.0, 0);
+    doorFrameTop2.castShadow = true;
+    doorFrameTop2.receiveShadow = true;
+    frontDoorFrame.add(doorFrameTop2);
+    const doorFrameLeft2 = new THREE.Mesh(new THREE.BoxGeometry(0.15, 2.0, 0.1), wallMat);
+    doorFrameLeft2.position.set(-0.6, 0, 0);
+    doorFrameLeft2.castShadow = true;
+    doorFrameLeft2.receiveShadow = true;
+    frontDoorFrame.add(doorFrameLeft2);
+    const doorFrameRight2 = new THREE.Mesh(new THREE.BoxGeometry(0.15, 2.0, 0.1), wallMat);
+    doorFrameRight2.position.set(0.6, 0, 0);
+    doorFrameRight2.castShadow = true;
+    doorFrameRight2.receiveShadow = true;
+    frontDoorFrame.add(doorFrameRight2);
+    const frontDoor = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.9, 0.05), doorMat);
+    frontDoor.position.set(0, 0, 0.03);
+    frontDoor.castShadow = true;
+    frontDoor.receiveShadow = true;
+    frontDoorFrame.add(frontDoor);
+    house.add(frontDoorFrame);
+    this.obstacles.push(doorFrameTop2, doorFrameLeft2, doorFrameRight2, frontDoor);
+    
+    // Windows in front wall
+    const addWindow = (x, z, width = 1.2, height = 1.0) => {
+      const windowFrame = new THREE.Group();
+      windowFrame.position.set(x, wallHeight/2 + 0.3, z);
+      
+      // Window frame
+      const frameTop = new THREE.Mesh(new THREE.BoxGeometry(width + 0.2, 0.1, 0.1), wallMat);
+      frameTop.position.set(0, height/2, 0);
+      frameTop.castShadow = true;
+      frameTop.receiveShadow = true;
+      windowFrame.add(frameTop);
+      const frameBottom = new THREE.Mesh(new THREE.BoxGeometry(width + 0.2, 0.1, 0.1), wallMat);
+      frameBottom.position.set(0, -height/2, 0);
+      frameBottom.castShadow = true;
+      frameBottom.receiveShadow = true;
+      windowFrame.add(frameBottom);
+      const frameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.1, height, 0.1), wallMat);
+      frameLeft.position.set(-width/2, 0, 0);
+      frameLeft.castShadow = true;
+      frameLeft.receiveShadow = true;
+      windowFrame.add(frameLeft);
+      const frameRight = new THREE.Mesh(new THREE.BoxGeometry(0.1, height, 0.1), wallMat);
+      frameRight.position.set(width/2, 0, 0);
+      frameRight.castShadow = true;
+      frameRight.receiveShadow = true;
+      windowFrame.add(frameRight);
+      
+      // Window glass
+      const glass = new THREE.Mesh(new THREE.PlaneGeometry(width, height), windowMat);
+      glass.position.z = 0.05;
+      windowFrame.add(glass);
+      
+      house.add(windowFrame);
+      this.obstacles.push(frameTop, frameBottom, frameLeft, frameRight);
+    };
+    
+    addWindow(-houseWidth/2 + 1.5, -houseDepth/2 - wallThickness/2);
+    addWindow(houseWidth/2 - 1.5, -houseDepth/2 - wallThickness/2);
     
     // Back wall (with basement door opening)
-    const backWallLeft = createWall(houseWidth/2 - 1.2, wallHeight, wallThickness, -(houseWidth/2 - 1.2)/2 - 0.6, wallHeight/2, houseDepth/2);
-    const backWallRight = createWall(houseWidth/2 - 1.2, wallHeight, wallThickness, (houseWidth/2 - 1.2)/2 + 0.6, wallHeight/2, houseDepth/2);
+    const backWallLeft = createWall(houseWidth/2 - 1.2, wallHeight, wallThickness, 
+      -(houseWidth/2 - 1.2)/2 - 0.6, wallHeight/2, houseDepth/2 + wallThickness/2);
+    const backWallRight = createWall(houseWidth/2 - 1.2, wallHeight, wallThickness, 
+      (houseWidth/2 - 1.2)/2 + 0.6, wallHeight/2, houseDepth/2 + wallThickness/2);
     
     // Left wall
-    createWall(wallThickness, wallHeight, houseDepth, -houseWidth/2, wallHeight/2, 0);
+    createWall(wallThickness, wallHeight, houseDepth + wallThickness, 
+      -houseWidth/2 - wallThickness/2, wallHeight/2, 0);
     
     // Right wall
-    createWall(wallThickness, wallHeight, houseDepth, houseWidth/2, wallHeight/2, 0);
+    createWall(wallThickness, wallHeight, houseDepth + wallThickness, 
+      houseWidth/2 + wallThickness/2, wallHeight/2, 0);
 
     // Ceiling
     const ceiling = new THREE.Mesh(
@@ -867,17 +947,119 @@ class Game {
     this.obstacles.push(doorFrameRight);
     this.obstacles.push(basementDoor); // Door itself is also an obstacle
 
-    // Ground plane outside house (for walking around)
-    const groundPlane = new THREE.Mesh(
-      new THREE.PlaneGeometry(50, 50),
-      protoMat(0x3a3a3a)
+    // Add furniture to make it feel like a house
+    // Bookshelf
+    const bookshelf = new THREE.Group();
+    bookshelf.position.set(-houseWidth/2 + 1.5, 0, -houseDepth/2 + 1.5);
+    const shelfBack = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.5, 0.8), furnitureMat);
+    shelfBack.position.set(0, 0.75, 0);
+    shelfBack.castShadow = true;
+    shelfBack.receiveShadow = true;
+    bookshelf.add(shelfBack);
+    for (let i = 0; i < 4; i++) {
+      const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.05, 0.8), furnitureMat);
+      shelf.position.set(0, i * 0.4 + 0.2, 0);
+      shelf.castShadow = true;
+      shelf.receiveShadow = true;
+      bookshelf.add(shelf);
+    }
+    house.add(bookshelf);
+    bookshelf.traverse(child => { if (child.isMesh) this.obstacles.push(child); });
+
+    // Table
+    const table = new THREE.Group();
+    table.position.set(houseWidth/2 - 2, 0, -houseDepth/2 + 2);
+    const tableTop = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.05, 0.8), furnitureMat);
+    tableTop.position.set(0, 0.4, 0);
+    tableTop.castShadow = true;
+    tableTop.receiveShadow = true;
+    table.add(tableTop);
+    for (let i = 0; i < 4; i++) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.4, 0.05), furnitureMat);
+      leg.position.set((i % 2) * 1.1 - 0.55, 0.2, (i < 2 ? -0.35 : 0.35));
+      leg.castShadow = true;
+      leg.receiveShadow = true;
+      table.add(leg);
+    }
+    house.add(table);
+    table.traverse(child => { if (child.isMesh) this.obstacles.push(child); });
+
+    // Couch/sofa
+    const couch = new THREE.Group();
+    couch.position.set(-2, 0, 2);
+    const couchBase = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.4, 0.8), furnitureMat);
+    couchBase.position.set(0, 0.2, 0);
+    couchBase.castShadow = true;
+    couchBase.receiveShadow = true;
+    couch.add(couchBase);
+    const couchBack = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.6, 0.1), furnitureMat);
+    couchBack.position.set(0, 0.5, -0.35);
+    couchBack.castShadow = true;
+    couchBack.receiveShadow = true;
+    couch.add(couchBack);
+    house.add(couch);
+    couch.traverse(child => { if (child.isMesh) this.obstacles.push(child); });
+
+    // Small cabinet/dresser
+    const cabinet = new THREE.Group();
+    cabinet.position.set(3, 0, 3);
+    const cabinetBody = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.6, 0.5), furnitureMat);
+    cabinetBody.position.set(0, 0.3, 0);
+    cabinetBody.castShadow = true;
+    cabinetBody.receiveShadow = true;
+    cabinet.add(cabinetBody);
+    house.add(cabinet);
+    cabinet.traverse(child => { if (child.isMesh) this.obstacles.push(child); });
+
+    // Ground plane outside house only - positioned below interior floor to prevent clipping
+    // Create separate ground segments around the house
+    const groundMat = protoMat(0x4a4a4a);
+    const groundThickness = 0.1;
+    const groundY = CONFIG.world.floorY - groundThickness/2;
+    
+    // Front ground
+    const frontGround = new THREE.Mesh(
+      new THREE.PlaneGeometry(houseWidth + 4, 10),
+      groundMat
     );
-    groundPlane.rotation.x = -Math.PI/2;
-    groundPlane.material.side = THREE.DoubleSide;
-    groundPlane.receiveShadow = true;
-    groundPlane.position.y = CONFIG.world.floorY;
-    this.scene.add(groundPlane);
-    this.groundObjects.push(groundPlane);
+    frontGround.rotation.x = -Math.PI/2;
+    frontGround.position.set(0, groundY, -houseDepth/2 - 5);
+    frontGround.receiveShadow = true;
+    this.scene.add(frontGround);
+    this.groundObjects.push(frontGround);
+    
+    // Back ground
+    const backGround = new THREE.Mesh(
+      new THREE.PlaneGeometry(houseWidth + 4, 10),
+      groundMat
+    );
+    backGround.rotation.x = -Math.PI/2;
+    backGround.position.set(0, groundY, houseDepth/2 + 5);
+    backGround.receiveShadow = true;
+    this.scene.add(backGround);
+    this.groundObjects.push(backGround);
+    
+    // Left ground
+    const leftGround = new THREE.Mesh(
+      new THREE.PlaneGeometry(10, houseDepth),
+      groundMat
+    );
+    leftGround.rotation.x = -Math.PI/2;
+    leftGround.position.set(-houseWidth/2 - 5, groundY, 0);
+    leftGround.receiveShadow = true;
+    this.scene.add(leftGround);
+    this.groundObjects.push(leftGround);
+    
+    // Right ground
+    const rightGround = new THREE.Mesh(
+      new THREE.PlaneGeometry(10, houseDepth),
+      groundMat
+    );
+    rightGround.rotation.x = -Math.PI/2;
+    rightGround.position.set(houseWidth/2 + 5, groundY, 0);
+    rightGround.receiveShadow = true;
+    this.scene.add(rightGround);
+    this.groundObjects.push(rightGround);
     
     // Add skybox with gradient effect
     const skyGeometry = new THREE.SphereGeometry(200, 32, 32);
