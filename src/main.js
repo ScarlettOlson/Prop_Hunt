@@ -10,6 +10,9 @@ const CONFIG = {
     speedWalk: 2.0,
     speedRun: 3.8,
     turnSpeed: THREE.MathUtils.degToRad(110), // yaw/sec via keyboard
+    jumpForce: 5.0, // upward velocity when jumping
+    groundCheckDistance: 0.1, // distance to check for ground
+    radius: 0.3, // collision radius for character
   },
   eye: {
     intervalMin: 30, // seconds
@@ -22,7 +25,7 @@ const CONFIG = {
     distance: 2.0,
   },
   world: {
-    gravity: -9.81, // future expansion
+    gravity: -15.0, // gravity acceleration
     floorY: 0,
   }
 };
@@ -44,6 +47,7 @@ const dom = {
   right: document.getElementById('right'),
   interact: document.getElementById('interact'),
   run: document.getElementById('run'),
+  jump: document.getElementById('jump'),
 };
 
 /**
@@ -90,60 +94,126 @@ class Input {
     this.keys = new Set();
     this.running = false;
     this.interactRequested = false;
+    this.jumpRequested = false;
 
     // Keyboard
     window.addEventListener('keydown', e => {
       this.keys.add(e.key.toLowerCase());
       if (e.key === 'Shift') this.running = true;
       if (e.key.toLowerCase() === 'e') this.interactRequested = true;
+      if (e.key === ' ' || e.key.toLowerCase() === ' ') {
+        e.preventDefault(); // Prevent page scroll
+        this.jumpRequested = true;
+      }
     });
     window.addEventListener('keyup', e => {
       this.keys.delete(e.key.toLowerCase());
       if (e.key === 'Shift') this.running = false;
     });
 
-    // Mobile buttons
+    // Mobile buttons - support both touch and mouse events
     const press = (k) => this.keys.add(k);
     const release = (k) => this.keys.delete(k);
-    dom.up.addEventListener('touchstart', e => { e.preventDefault(); press('w'); }, {passive:false});
-    dom.up.addEventListener('touchend', () => release('w'));
-    dom.down.addEventListener('touchstart', e => { e.preventDefault(); press('s'); }, {passive:false});
-    dom.down.addEventListener('touchend', () => release('s'));
-    dom.left.addEventListener('touchstart', e => { e.preventDefault(); press('a'); }, {passive:false});
-    dom.left.addEventListener('touchend', () => release('a'));
-    dom.right.addEventListener('touchstart', e => { e.preventDefault(); press('d'); }, {passive:false});
-    dom.right.addEventListener('touchend', () => release('d'));
-    dom.run.addEventListener('touchstart', e => { e.preventDefault(); this.running = true; }, {passive:false});
-    dom.run.addEventListener('touchend', () => { this.running = false; });
-    dom.interact.addEventListener('click', () => { this.interactRequested = true; });
+    
+    // Up button
+    const upPress = (e) => { e.preventDefault(); press('w'); };
+    const upRelease = () => release('w');
+    dom.up.addEventListener('touchstart', upPress, {passive:false});
+    dom.up.addEventListener('touchend', upRelease);
+    dom.up.addEventListener('mousedown', upPress);
+    dom.up.addEventListener('mouseup', upRelease);
+    dom.up.addEventListener('mouseleave', upRelease);
+    
+    // Down button
+    const downPress = (e) => { e.preventDefault(); press('s'); };
+    const downRelease = () => release('s');
+    dom.down.addEventListener('touchstart', downPress, {passive:false});
+    dom.down.addEventListener('touchend', downRelease);
+    dom.down.addEventListener('mousedown', downPress);
+    dom.down.addEventListener('mouseup', downRelease);
+    dom.down.addEventListener('mouseleave', downRelease);
+    
+    // Left button
+    const leftPress = (e) => { e.preventDefault(); press('a'); };
+    const leftRelease = () => release('a');
+    dom.left.addEventListener('touchstart', leftPress, {passive:false});
+    dom.left.addEventListener('touchend', leftRelease);
+    dom.left.addEventListener('mousedown', leftPress);
+    dom.left.addEventListener('mouseup', leftRelease);
+    dom.left.addEventListener('mouseleave', leftRelease);
+    
+    // Right button
+    const rightPress = (e) => { e.preventDefault(); press('d'); };
+    const rightRelease = () => release('d');
+    dom.right.addEventListener('touchstart', rightPress, {passive:false});
+    dom.right.addEventListener('touchend', rightRelease);
+    dom.right.addEventListener('mousedown', rightPress);
+    dom.right.addEventListener('mouseup', rightRelease);
+    dom.right.addEventListener('mouseleave', rightRelease);
+    
+    // Run button
+    const runPress = (e) => { e.preventDefault(); this.running = true; };
+    const runRelease = () => { this.running = false; };
+    dom.run.addEventListener('touchstart', runPress, {passive:false});
+    dom.run.addEventListener('touchend', runRelease);
+    dom.run.addEventListener('mousedown', runPress);
+    dom.run.addEventListener('mouseup', runRelease);
+    dom.run.addEventListener('mouseleave', runRelease);
+    
+    // Interact button
+    const interactPress = (e) => { e.preventDefault(); this.interactRequested = true; };
+    dom.interact.addEventListener('touchstart', interactPress, {passive:false});
+    dom.interact.addEventListener('click', interactPress);
+    dom.interact.addEventListener('mousedown', interactPress);
+    
+    // Jump button
+    const jumpPress = (e) => { e.preventDefault(); this.jumpRequested = true; };
+    dom.jump.addEventListener('touchstart', jumpPress, {passive:false});
+    dom.jump.addEventListener('click', jumpPress);
+    dom.jump.addEventListener('mousedown', jumpPress);
 
-    // Mouse look (simple drag-to-look)
+    // Mouse look (drag-to-look with pitch and yaw)
     this.mouseDown = false;
     this.deltaYaw = 0;
+    this.deltaPitch = 0;
     window.addEventListener('mousedown', () => { this.mouseDown = true; });
     window.addEventListener('mouseup', () => { this.mouseDown = false; });
     window.addEventListener('mousemove', e => {
       if (!this.mouseDown) return;
       this.deltaYaw += e.movementX * 0.0025;
+      this.deltaPitch += e.movementY * 0.0025;
     });
     // Touch look
     let lastX = null;
+    let lastY = null;
     window.addEventListener('touchstart', e => {
-      if (e.touches.length === 1) lastX = e.touches[0].clientX;
-    }, {passive:true});
-    window.addEventListener('touchmove', e => {
-      if (e.touches.length === 1 && lastX !== null) {
-        const x = e.touches[0].clientX;
-        this.deltaYaw += (x - lastX) * 0.003;
-        lastX = x;
+      if (e.touches.length === 1) {
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
       }
     }, {passive:true});
-    window.addEventListener('touchend', () => { lastX = null; });
+    window.addEventListener('touchmove', e => {
+      if (e.touches.length === 1 && lastX !== null && lastY !== null) {
+        const x = e.touches[0].clientX;
+        const y = e.touches[0].clientY;
+        this.deltaYaw += (x - lastX) * 0.003;
+        this.deltaPitch += (y - lastY) * 0.003;
+        lastX = x;
+        lastY = y;
+      }
+    }, {passive:true});
+    window.addEventListener('touchend', () => { lastX = null; lastY = null; });
   }
 
   consumeInteract() {
     const v = this.interactRequested;
     this.interactRequested = false;
+    return v;
+  }
+
+  consumeJump() {
+    const v = this.jumpRequested;
+    this.jumpRequested = false;
     return v;
   }
 }
@@ -370,7 +440,7 @@ class Game {
     this.scene.background = new THREE.Color(0x0a0a0a);
 
     this.camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 100);
-    this.camera.position.set(0, CONFIG.player.height, 4);
+    this.camera.position.set(0, CONFIG.player.height, 0);
 
     // Lighting
     const ambient = new THREE.AmbientLight(0x404040, 0.8);
@@ -382,7 +452,13 @@ class Game {
 
     // Controls state
     this.yaw = 0;
+    this.pitch = 0;
     this.runHeld = false;
+
+    // Physics state
+    this.velocity = new THREE.Vector3(0, 0, 0);
+    this.isGrounded = false;
+    this.groundObjects = []; // objects that can be stood on
 
     // World
     this.obstacles = []; // for line-of-sight blocking
@@ -419,206 +495,54 @@ class Game {
     this.interactables = [];
     this.updateables = [];
     this.obstacles = [];
+    this.groundObjects = [];
     this.collected.clear();
     this.yaw = 0;
-    this.camera.position.set(0, CONFIG.player.height, 4);
+    this.pitch = 0;
+    this.velocity.set(0, 0, 0);
+    this.isGrounded = false;
+    this.camera.position.set(0, CONFIG.player.height, 0);
     this.hideOverlay();
     dom.paperCount.textContent = '0';
     dom.codeDisplay.textContent = '_ _ _ _';
-    dom.objective.textContent = 'Find all papers.';
+    dom.objective.textContent = 'Move around and test the character controller.';
 
-    // Materials depending on mode
+    // Simple material for baseplate
     const protoMat = (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0.0 });
-    const mats = {};
-    if (this.prototypeMode) {
-      mats.floor = protoMat(0x444444);
-      mats.wall = protoMat(0x777777);
-      mats.wood = protoMat(0x8b6b3e);
-      mats.metal = protoMat(0x888888);
-      mats.paper = protoMat(0xddddcc);
-      mats.eye = protoMat(0xffffff);
-    } else {
-      mats.floorTex = await loadTextureOrFallback('assets/textures/floor.jpg', 'checker');
-      mats.wallTex = await loadTextureOrFallback('assets/textures/wallpaper.jpg', 'noise');
-      mats.woodTex = await loadTextureOrFallback('assets/textures/wood.jpg', 'checker');
-      mats.metalTex = await loadTextureOrFallback('assets/textures/metal.jpg', 'checker');
-      mats.paperTex = await loadTextureOrFallback('assets/textures/paper.jpg', 'noise');
-      mats.eyeTex = await loadTextureOrFallback('assets/textures/eye.jpg', 'checker');
+    const floorMat = protoMat(0x444444);
 
-      mats.floor = new THREE.MeshStandardMaterial({ map: mats.floorTex });
-      mats.wall = new THREE.MeshStandardMaterial({ map: mats.wallTex });
-      mats.wood = new THREE.MeshStandardMaterial({ map: mats.woodTex });
-      mats.metal = new THREE.MeshStandardMaterial({ map: mats.metalTex, metalness: 0.3, roughness: 0.5 });
-      mats.paper = new THREE.MeshStandardMaterial({ map: mats.paperTex });
-      mats.eye = new THREE.MeshPhongMaterial({ map: mats.eyeTex, shininess: 40 });
-    }
-
-    // Build house with window gaps
-    const house = new THREE.Group();
-    this.scene.add(house);
-
-    // Floor
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), mats.floor);
+    // Create simple baseplate
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), floorMat);
     floor.rotation.x = -Math.PI/2;
     floor.receiveShadow = true;
     floor.position.y = CONFIG.world.floorY;
-    house.add(floor);
+    this.scene.add(floor);
+    this.groundObjects.push(floor);
+  }
 
-    // Walls (create segments leaving window gaps)
-    const wallThickness = 0.2;
-    const wallHeight = 2.5;
-
-    const mkWall = (w, h, d, x, y, z, rx=0, ry=0, rz=0) => {
-      const wall = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mats.wall);
-      wall.position.set(x,y,z);
-      wall.rotation.set(rx,ry,rz);
-      wall.castShadow = true; wall.receiveShadow = true;
-      house.add(wall);
-      this.obstacles.push(wall);
-      return wall;
-    };
-
-    // Front wall with two window gaps
-    // Segment left
-    mkWall(3.0, wallHeight, wallThickness, -3.5, wallHeight/2, -5);
-    // Segment right
-    mkWall(3.0, wallHeight, wallThickness, 3.5, wallHeight/2, -5);
-    // Window beams (thin frames) to mount window meshes
-    const windowFrames = [];
-    const addWindow = (x) => {
-      const frame = new THREE.Object3D();
-      frame.position.set(x, 1.2, -5 + wallThickness/2);
-      house.add(frame);
-      windowFrames.push(frame);
-
-      // Transparent plane to represent window glass (not blocking line of sight)
-      const glass = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.2), new THREE.MeshBasicMaterial({
-        color: 0x99bbee, transparent: true, opacity: 0.2
-      }));
-      frame.add(glass);
-    };
-    addWindow(-1.5);
-    addWindow(1.5);
-
-    // Back wall
-    mkWall(10, wallHeight, wallThickness, 0, wallHeight/2, 5);
-    // Left wall
-    mkWall(wallThickness, wallHeight, 10, -5, wallHeight/2, 0);
-    // Right wall
-    mkWall(wallThickness, wallHeight, 10, 5, wallHeight/2, 0);
-
-    // Basement door area at back-right
-    const basementDoorFrame = mkWall(2.0, wallHeight, wallThickness, 3.0, wallHeight/2, 4.9);
-    // Create doorway gap by not placing a segment. Add a lock near it.
-    const lock = new Lock({ material: mats.metal });
-    lock.position.set(3.0, 1.0, 4.6);
-    this.scene.add(lock);
-    this.interactables.push(lock);
-
-    // Cupboards and drawers (kitchen on left side)
-    const kitchenGroup = new THREE.Group();
-    kitchenGroup.position.set(-3.0, 0, -2.0);
-    this.scene.add(kitchenGroup);
-
-    const cupboard = new HingedDoor({ width: 0.6, height: 0.9, depth: 0.03, openAngle: 95, material: mats.wood });
-    cupboard.position.set(0, 0.45, 0);
-    kitchenGroup.add(cupboard);
-    this.interactables.push(cupboard);
-    this.updateables.push(cupboard);
-
-    const drawer1 = new SlidingDrawer({ width: 0.5, height: 0.18, depth: 0.4, extend: 0.35, material: mats.wood });
-    drawer1.position.set(0.9, 0.3, 0);
-    kitchenGroup.add(drawer1);
-    this.interactables.push(drawer1);
-    this.updateables.push(drawer1);
-
-    const drawer2 = new SlidingDrawer({ width: 0.5, height: 0.18, depth: 0.4, extend: 0.35, material: mats.wood });
-    drawer2.position.set(0.9, 0.55, 0);
-    kitchenGroup.add(drawer2);
-    this.interactables.push(drawer2);
-    this.updateables.push(drawer2);
-
-    // Place four papers in varied locations
-    const papers = [
-      { index: 1, value: 3, pos: new THREE.Vector3(-3.0, 0.4, -2.0) }, // inside cupboard
-      { index: 2, value: 7, pos: new THREE.Vector3(0.0, 0.02, 0.0) },   // on floor center
-      { index: 3, value: 1, pos: new THREE.Vector3(4.2, 0.8, -4.0) },   // on window sill
-      { index: 4, value: 5, pos: new THREE.Vector3(2.8, 0.4, 3.8) },    // near basement door
-    ];
-    for (const p of papers) {
-      const paper = new Paper({ index: p.index, value: p.value, material: mats.paper });
-      paper.position.copy(p.pos);
-      this.scene.add(paper);
-      this.interactables.push(paper);
-    }
-
-    // Optional models in Full mode
-    if (!this.prototypeMode) {
-      const gltfLoader = new GLTFLoader();
-      const tryLoad = (url) => new Promise(resolve => gltfLoader.load(url, gltf => resolve(gltf.scene), undefined, () => resolve(null)));
-
-      const modelCupboard = await tryLoad('assets/models/cupboard.glb');
-      if (modelCupboard) {
-        modelCupboard.scale.set(0.8,0.8,0.8);
-        modelCupboard.position.copy(kitchenGroup.position).add(new THREE.Vector3(-0.1, 0, 0));
-        this.scene.add(modelCupboard);
-        // Add meshes as obstacles
-        modelCupboard.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; this.obstacles.push(o); } });
-      }
-
-      const modelDrawer = await tryLoad('assets/models/drawer.glb');
-      if (modelDrawer) {
-        modelDrawer.scale.set(0.7,0.7,0.7);
-        modelDrawer.position.copy(kitchenGroup.position).add(new THREE.Vector3(0.9, 0, 0.05));
-        this.scene.add(modelDrawer);
-        modelDrawer.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; this.obstacles.push(o); } });
-      }
-
-      const modelLock = await tryLoad('assets/models/lock.glb');
-      if (modelLock) {
-        modelLock.position.copy(lock.position);
-        this.scene.add(modelLock);
-        modelLock.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; this.obstacles.push(o); } });
-      }
-    }
-
-    // Windows giant eye
-    this.eye = new GiantEye({
-      texture: this.prototypeMode ? null : mats.eye.map || mats.eyeTex || null,
-      houseWindows: windowFrames,
-      scene: this.scene,
-      getPlayerPos: () => this.camera.position.clone(),
-      getPlayerDir: () => {
-        const dir = new THREE.Vector3(0,0,-1);
-        dir.applyQuaternion(this.camera.quaternion);
-        return dir;
-      }
-    });
-
-    // Basement trigger (win when stepping inside)
-    const basementTrigger = new THREE.Mesh(
-      new THREE.BoxGeometry(2.2, 2.0, 1.2),
-      new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.08 })
+  checkGrounded() {
+    // Raycast downward from feet position to check if on ground
+    const raycaster = new THREE.Raycaster();
+    const feetPos = new THREE.Vector3(
+      this.camera.position.x,
+      this.camera.position.y - CONFIG.player.height + 0.05, // Feet position + small offset
+      this.camera.position.z
     );
-    basementTrigger.position.set(3.0, 1.0, 4.0);
-    this.scene.add(basementTrigger);
-    basementTrigger.visible = this.prototypeMode; // visible only in prototype to debug
-    this.basementTrigger = basementTrigger;
-
-    // Obstacles: add furniture and walls already registered
-    // Add kitchenGroup children meshes
-    kitchenGroup.traverse(o => { if (o.isMesh) this.obstacles.push(o); });
-
-    // Camera initial facing down the house
-    this.yaw = 0;
-
-    // Update UI mode label
-    dom.objective.textContent = 'Find all papers.';
+    raycaster.set(feetPos, new THREE.Vector3(0, -1, 0));
+    raycaster.far = CONFIG.player.groundCheckDistance + 0.15;
+    
+    const hits = raycaster.intersectObjects(this.groundObjects, true);
+    if (hits.length > 0) {
+      const hit = hits[0];
+      const distanceToGround = hit.distance - 0.05; // Subtract the offset
+      return distanceToGround <= CONFIG.player.groundCheckDistance;
+    }
+    return false;
   }
 
   loop() {
     requestAnimationFrame(() => this.loop());
-    const dt = this.clock.getDelta();
+    const dt = Math.min(this.clock.getDelta(), 0.1); // Cap delta time for stability
 
     // Update interactables
     for (const u of this.updateables) u.update(dt);
@@ -628,94 +552,140 @@ class Game {
 
     // Turn from mouse drag
     this.yaw += this.input.deltaYaw;
+    this.pitch += this.input.deltaPitch;
     this.input.deltaYaw = 0;
+    this.input.deltaPitch = 0;
+
+    // Clamp pitch to prevent flipping
+    this.pitch = THREE.MathUtils.clamp(this.pitch, -Math.PI/2, Math.PI/2);
 
     // Turn from keyboard
     const turningLeft = this.input.keys.has('arrowleft') || this.input.keys.has('q');
-    const turningRight = this.input.keys.has('arrowright') || this.input.keys.has('e') && !this.input.consumeInteract();
+    const turningRight = this.input.keys.has('arrowright') || (this.input.keys.has('e') && !this.input.consumeInteract());
     if (turningLeft) this.yaw += CONFIG.player.turnSpeed * dt;
     if (turningRight) this.yaw -= CONFIG.player.turnSpeed * dt;
 
-    // Update camera rotation
+    // Update camera rotation (yaw and pitch)
     const quat = new THREE.Quaternion();
-    quat.setFromEuler(new THREE.Euler(0, this.yaw, 0, 'YXZ'));
+    quat.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
     this.camera.quaternion.copy(quat);
 
-    // Translate
-    const forward = new THREE.Vector3(0,0,-1).applyQuaternion(this.camera.quaternion);
-    const right = new THREE.Vector3(1,0,0).applyQuaternion(this.camera.quaternion);
+    // Check if grounded
+    this.isGrounded = this.checkGrounded();
 
-    let vel = new THREE.Vector3();
-    if (this.input.keys.has('w') || this.input.keys.has('arrowup')) vel.add(forward);
-    if (this.input.keys.has('s') || this.input.keys.has('arrowdown')) vel.add(forward.clone().multiplyScalar(-1));
-    if (this.input.keys.has('a')) vel.add(right.clone().multiplyScalar(-1));
-    if (this.input.keys.has('d')) vel.add(right);
-
-    if (vel.lengthSq() > 0) {
-      vel.normalize().multiplyScalar(speed * dt);
-      const nextPos = this.camera.position.clone().add(vel);
-      nextPos.y = CONFIG.player.height;
-
-      // Simple collision: prevent crossing walls by ray forward
-      const ray = new THREE.Raycaster(this.camera.position, vel.clone().normalize(), 0, 0.5);
-      const hits = ray.intersectObjects(this.obstacles, true);
-      if (hits.length === 0) this.camera.position.copy(nextPos);
+    // Handle jumping
+    if (this.input.consumeJump() && this.isGrounded) {
+      this.velocity.y = CONFIG.player.jumpForce;
+      this.isGrounded = false;
     }
 
-    // Interaction ray from camera forward
-    const interact = this.input.consumeInteract();
-    this.raycaster.set(this.camera.position, forward);
-    const candidates = this.raycaster.intersectObjects(this.interactables, true);
-    if (candidates.length > 0 && candidates[0].distance < CONFIG.interact.distance) {
-      const hit = candidates[0].object;
-      // Find parent interactable
-      let node = hit;
-      while (node && !node.isInteractable) node = node.parent;
-      if (node && node.isInteractable && interact) {
-        if (node instanceof Paper) {
-          if (!this.collected.has(node.index)) {
-            this.collected.set(node.index, node.value);
-            dom.paperCount.textContent = `${this.collected.size}`;
-            this.scene.remove(node);
-            this.interactables = this.interactables.filter(o => o !== node);
-            // Update code display
-            const code = [1,2,3,4].map(i => this.collected.has(i) ? this.collected.get(i) : '_');
-            dom.codeDisplay.textContent = code.join(' ');
-            if (this.collected.size === 4) dom.objective.textContent = 'Unlock the basement lock.';
-          }
-        } else if (node instanceof Lock) {
-          const ok = node.tryUnlock(this.collected);
-          if (ok) {
-            dom.objective.textContent = 'Basement unlocked. Enter to win.';
-            // Remove door frame obstacle to allow entry
-            this.scene.remove(this.basementTrigger.material); // keep trigger
-          }
-        } else if (node.onInteract) {
-          node.onInteract();
+    // Apply gravity
+    if (!this.isGrounded) {
+      this.velocity.y += CONFIG.world.gravity * dt;
+    } else {
+      // Reset vertical velocity when grounded
+      if (this.velocity.y < 0) {
+        this.velocity.y = 0;
+      }
+    }
+
+    // Horizontal movement input
+    const forward = new THREE.Vector3(0,0,-1).applyQuaternion(this.camera.quaternion);
+    const right = new THREE.Vector3(1,0,0).applyQuaternion(this.camera.quaternion);
+    forward.y = 0; // Remove vertical component
+    right.y = 0;
+    forward.normalize();
+    right.normalize();
+
+    const horizontalVel = new THREE.Vector3();
+    if (this.input.keys.has('w') || this.input.keys.has('arrowup')) horizontalVel.add(forward);
+    if (this.input.keys.has('s') || this.input.keys.has('arrowdown')) horizontalVel.add(forward.clone().multiplyScalar(-1));
+    if (this.input.keys.has('a')) horizontalVel.add(right.clone().multiplyScalar(-1));
+    if (this.input.keys.has('d')) horizontalVel.add(right);
+
+    // Apply horizontal velocity
+    if (horizontalVel.lengthSq() > 0) {
+      horizontalVel.normalize().multiplyScalar(speed);
+      this.velocity.x = horizontalVel.x;
+      this.velocity.z = horizontalVel.z;
+    } else {
+      // Apply friction when not moving
+      this.velocity.x *= 0.8;
+      this.velocity.z *= 0.8;
+    }
+
+    // Calculate new position
+    const movement = this.velocity.clone().multiplyScalar(dt);
+    let newPos = this.camera.position.clone().add(movement);
+
+    // Horizontal collision detection
+    const horizontalMovement = new THREE.Vector3(movement.x, 0, movement.z);
+    if (horizontalMovement.lengthSq() > 0 && this.obstacles.length > 0) {
+      const raycaster = new THREE.Raycaster();
+      raycaster.set(this.camera.position, horizontalMovement.clone().normalize());
+      raycaster.far = horizontalMovement.length() + CONFIG.player.radius;
+      const hits = raycaster.intersectObjects(this.obstacles, true);
+      if (hits.length > 0 && hits[0].distance < horizontalMovement.length() + CONFIG.player.radius) {
+        // Collision detected, don't move horizontally
+        newPos.x = this.camera.position.x;
+        newPos.z = this.camera.position.z;
+        this.velocity.x = 0;
+        this.velocity.z = 0;
+      }
+    }
+
+    // Vertical collision and ground detection
+    if (movement.y < 0) {
+      // Moving down - check for ground
+      const feetY = this.camera.position.y - CONFIG.player.height;
+      const raycaster = new THREE.Raycaster();
+      raycaster.set(new THREE.Vector3(newPos.x, feetY + 0.1, newPos.z), new THREE.Vector3(0, -1, 0));
+      raycaster.far = Math.abs(movement.y) + 0.2;
+      const hits = raycaster.intersectObjects(this.groundObjects, true);
+      if (hits.length > 0) {
+        const groundY = hits[0].point.y + CONFIG.player.height;
+        if (newPos.y <= groundY) {
+          newPos.y = groundY;
+          this.velocity.y = 0;
+          this.isGrounded = true;
+        }
+      } else {
+        // No ground found, keep falling
+        this.isGrounded = false;
+      }
+    } else {
+      // Moving up - check for ceiling collision
+      if (this.obstacles.length > 0) {
+        const headY = this.camera.position.y;
+        const raycaster = new THREE.Raycaster();
+        raycaster.set(new THREE.Vector3(newPos.x, headY, newPos.z), new THREE.Vector3(0, 1, 0));
+        raycaster.far = movement.y + 0.2;
+        const hits = raycaster.intersectObjects(this.obstacles, true);
+        if (hits.length > 0 && hits[0].distance < movement.y + 0.2) {
+          newPos.y = this.camera.position.y;
+          this.velocity.y = 0;
         }
       }
     }
 
-    // Win condition: stepping into basement trigger after unlocked
-    if (this.basementTrigger) {
-      const pt = this.basementTrigger.position.clone();
-      const ext = new THREE.Vector3(1.1, 1.0, 0.6);
-      const cam = this.camera.position;
-      const inside =
-        Math.abs(cam.x - pt.x) < ext.x &&
-        Math.abs(cam.y - pt.y) < ext.y &&
-        Math.abs(cam.z - pt.z) < ext.z;
-      const allFound = this.collected.size === 4;
-      if (inside && allFound) {
-        this.showOverlay('You descended into the basement. You win.');
-      }
-    }
+    // Apply position
+    this.camera.position.copy(newPos);
 
-    // Eye update (lose condition)
-    if (this.eye) {
-      const result = this.eye.update(dt, this.obstacles);
-      if (result === 'spotted') {
-        this.showOverlay('The giant eye spotted you through the window. Game over.');
+    // Interaction ray from camera forward (if there are interactables)
+    if (this.interactables.length > 0) {
+      const interact = this.input.consumeInteract();
+      this.raycaster.set(this.camera.position, forward);
+      const candidates = this.raycaster.intersectObjects(this.interactables, true);
+      if (candidates.length > 0 && candidates[0].distance < CONFIG.interact.distance) {
+        const hit = candidates[0].object;
+        // Find parent interactable
+        let node = hit;
+        while (node && !node.isInteractable) node = node.parent;
+        if (node && node.isInteractable && interact) {
+          if (node.onInteract) {
+            node.onInteract();
+          }
+        }
       }
     }
 
