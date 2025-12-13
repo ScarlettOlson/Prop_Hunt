@@ -298,12 +298,13 @@ function createShineShader() {
  * Note with password piece
  */
 class Note extends Interactable {
-  constructor({ passwordPiece, content, material, position, useShineShader = false }) {
+  constructor({ passwordPiece, content, material, position, passwordIndex, useShineShader = false }) {
     super({
       label: 'Note',
       hint: 'Read Note (E)',
     });
     this.passwordPiece = passwordPiece; // e.g., "12", "34", "56"
+    this.passwordIndex = passwordIndex; // Position in password (0, 1, 2)
     this.content = content || `Password piece: ${passwordPiece}`;
     this.collected = false;
     this.bobOffset = Math.random() * Math.PI * 2; // Random starting phase for animation
@@ -666,7 +667,7 @@ class Game {
     this.obstacles = []; // for line-of-sight blocking
     this.interactables = [];
     this.updateables = [];
-    this.passwordPieces = []; // collected password pieces in order
+    this.passwordPieces = new Map(); // passwordIndex -> passwordPiece (for correct ordering)
 
     // UI
     dom.fullModeCheckbox.addEventListener('change', () => {
@@ -718,7 +719,7 @@ class Game {
     this.obstacles = [];
     this.groundObjects = [];
     this.collected.clear();
-    this.passwordPieces = [];
+    this.passwordPieces = new Map();
     this.yaw = 0;
     this.pitch = 0;
     this.velocity.set(0, 0, 0);
@@ -1099,19 +1100,23 @@ class Game {
     this.scene.add(skybox);
 
     // Place 3 notes in good hiding spots inside the house
+    // passwordIndex determines the position in the final password (0 = first, 1 = second, 2 = third)
     const notes = [
       {
         passwordPiece: '12',
+        passwordIndex: 0, // First position in password
         content: 'I found this note hidden behind the old bookshelf.\n\nPassword piece: 12',
         position: new THREE.Vector3(-4, CONFIG.player.height * 0.6, -3) // Left side of house
       },
       {
         passwordPiece: '34',
+        passwordIndex: 1, // Second position in password
         content: 'This was tucked under a loose floorboard.\n\nPassword piece: 34',
         position: new THREE.Vector3(3, CONFIG.player.height * 0.5, 2) // Right side of house
       },
       {
         passwordPiece: '56',
+        passwordIndex: 2, // Third position in password
         content: 'Hidden in a crack in the wall.\n\nPassword piece: 56',
         position: new THREE.Vector3(-2, CONFIG.player.height * 0.7, -4) // Front area
       }
@@ -1120,6 +1125,7 @@ class Game {
     for (const noteData of notes) {
       const note = new Note({
         passwordPiece: noteData.passwordPiece,
+        passwordIndex: noteData.passwordIndex,
         content: noteData.content,
         material: noteMat,
         position: noteData.position,
@@ -1233,27 +1239,38 @@ class Game {
           interactionHandled = true;
           // Show note popup
           this.showNotePopup(closestNote);
-          // Collect password piece if not already collected
-          if (!closestNote.collected) {
-            closestNote.collected = true;
-            this.passwordPieces.push(closestNote.passwordPiece);
-            // Hide the note visually (make it transparent)
-            closestNote.traverse(child => {
-              if (child.isMesh && child.material) {
-                child.material.transparent = true;
-                child.material.opacity = 0.3;
+            // Collect password piece if not already collected
+            if (!closestNote.collected) {
+              closestNote.collected = true;
+              // Store password piece at its fixed index position
+              this.passwordPieces.set(closestNote.passwordIndex, closestNote.passwordPiece);
+              // Hide the note visually (make it transparent)
+              closestNote.traverse(child => {
+                if (child.isMesh && child.material) {
+                  child.material.transparent = true;
+                  child.material.opacity = 0.3;
+                }
+              });
+              // Update UI - display password in correct order (indices 0, 1, 2)
+              dom.noteCount.textContent = this.passwordPieces.size;
+              // Build password string in correct order
+              const passwordArray = [];
+              for (let i = 0; i < 3; i++) {
+                if (this.passwordPieces.has(i)) {
+                  passwordArray.push(this.passwordPieces.get(i));
+                } else {
+                  passwordArray.push('__');
+                }
               }
-            });
-            // Update UI
-            dom.noteCount.textContent = this.passwordPieces.length;
-            const password = this.passwordPieces.join('');
-            dom.codeDisplay.textContent = password.padEnd(6, '_').split('').join(' ');
-            if (this.passwordPieces.length === 3) {
-              dom.objective.textContent = 'Return to the basement door to unlock it.';
-            } else {
-              dom.objective.textContent = `Find ${3 - this.passwordPieces.length} more note(s) to unlock the basement.`;
+              // Join pieces and then split into individual characters for display
+              const password = passwordArray.join('');
+              dom.codeDisplay.textContent = password.split('').join(' ');
+              if (this.passwordPieces.size === 3) {
+                dom.objective.textContent = 'Return to the basement door to unlock it.';
+              } else {
+                dom.objective.textContent = `Find ${3 - this.passwordPieces.size} more note(s) to unlock the basement.`;
+              }
             }
-          }
         } else {
           // Try raycast for other interactables
           this.raycaster.set(this.camera.position, forward);
