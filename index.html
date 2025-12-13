@@ -15,15 +15,22 @@
       </label>
     </div>
     <div id="status">
-      <div><span class="label">Papers:</span> <span id="paperCount">0</span>/4</div>
-      <div><span class="label">Code:</span> <span id="codeDisplay">_ _ _ _</span></div>
-      <div><span class="label">Objective:</span> <span id="objective">Find all papers.</span></div>
+      <div><span class="label">Notes:</span> <span id="noteCount">0</span>/3</div>
+      <div><span class="label">Password:</span> <span id="codeDisplay">_ _ _ _ _ _</span></div>
+      <div><span class="label">Objective:</span> <span id="objective">Find 3 notes with password pieces to unlock the basement.</span></div>
     </div>
   </div>
 
   <div id="overlay">
     <div id="message"></div>
     <button id="restartBtn" class="btn">Restart</button>
+  </div>
+
+  <div id="notePopup" class="note-popup">
+    <div class="note-content">
+      <button id="closeNoteBtn" class="close-btn">×</button>
+      <div id="noteText" class="note-text"></div>
+    </div>
   </div>
 
   <div id="controls">

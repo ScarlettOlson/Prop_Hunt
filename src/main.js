@@ -22,7 +22,7 @@ const CONFIG = {
     fov: THREE.MathUtils.degToRad(35),
   },
   interact: {
-    distance: 2.0,
+    distance: 5.0, // Increased interaction distance
   },
   world: {
     gravity: -15.0, // gravity acceleration
@@ -34,7 +34,7 @@ const CONFIG = {
  * Global DOM elements
  */
 const dom = {
-  paperCount: document.getElementById('paperCount'),
+  noteCount: document.getElementById('noteCount'),
   codeDisplay: document.getElementById('codeDisplay'),
   objective: document.getElementById('objective'),
   fullModeCheckbox: document.getElementById('fullModeCheckbox'),
@@ -48,6 +48,9 @@ const dom = {
   interact: document.getElementById('interact'),
   run: document.getElementById('run'),
   jump: document.getElementById('jump'),
+  notePopup: document.getElementById('notePopup'),
+  noteText: document.getElementById('noteText'),
+  closeNoteBtn: document.getElementById('closeNoteBtn'),
 };
 
 /**
@@ -228,6 +231,167 @@ class Interactable extends THREE.Group {
     this.label = label || 'Interactable';
     this.onInteract = onInteract || (() => {});
     this.hint = hint;
+  }
+}
+
+/**
+ * Create shine shader material for notes
+ */
+function createShineShader() {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      time: { value: 0.0 },
+      baseColor: { value: new THREE.Color(0xddddcc) },
+      shineColor: { value: new THREE.Color(0xffffff) },
+      shineIntensity: { value: 1.5 },
+      shineSpeed: { value: 2.0 },
+      shineWidth: { value: 0.3 }
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      varying vec3 vPosition;
+      varying vec3 vNormal;
+      
+      void main() {
+        vUv = uv;
+        vPosition = position;
+        vNormal = normalize(normalMatrix * normal);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform float time;
+      uniform vec3 baseColor;
+      uniform vec3 shineColor;
+      uniform float shineIntensity;
+      uniform float shineSpeed;
+      uniform float shineWidth;
+      
+      varying vec2 vUv;
+      varying vec3 vPosition;
+      varying vec3 vNormal;
+      
+      void main() {
+        vec3 color = baseColor;
+        
+        // Create moving shine effect
+        float shine = sin((vUv.x + vUv.y) * 3.14159 + time * shineSpeed) * 0.5 + 0.5;
+        shine = pow(shine, 1.0 / shineWidth);
+        
+        // Add shine highlight
+        vec3 finalColor = mix(color, shineColor, shine * shineIntensity * 0.3);
+        
+        // Add rim lighting effect
+        float rim = 1.0 - abs(dot(vNormal, vec3(0.0, 0.0, 1.0)));
+        rim = pow(rim, 2.0);
+        finalColor += shineColor * rim * 0.2;
+        
+        gl_FragColor = vec4(finalColor, 1.0);
+      }
+    `,
+    side: THREE.DoubleSide,
+    transparent: false
+  });
+}
+
+/**
+ * Note with password piece
+ */
+class Note extends Interactable {
+  constructor({ passwordPiece, content, material, position, useShineShader = false }) {
+    super({
+      label: 'Note',
+      hint: 'Read Note (E)',
+    });
+    this.passwordPiece = passwordPiece; // e.g., "12", "34", "56"
+    this.content = content || `Password piece: ${passwordPiece}`;
+    this.collected = false;
+    this.bobOffset = Math.random() * Math.PI * 2; // Random starting phase for animation
+    this.useShineShader = useShineShader;
+    this.shineMaterial = null;
+
+    // Create shine shader material if needed
+    if (useShineShader) {
+      this.shineMaterial = createShineShader();
+    }
+
+    // Create a visual representation (paper/note) - make it bigger and vertical so it's easier to see and interact with
+    const geom = new THREE.PlaneGeometry(0.3, 0.4);
+    const noteMaterial = useShineShader ? this.shineMaterial : material;
+    const mesh = new THREE.Mesh(geom, noteMaterial);
+    // Keep it vertical (not flat) so it's easier to see and interact with
+    mesh.rotation.y = Math.PI; // Face forward
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.add(mesh);
+    this.mesh = mesh; // Store reference for animation
+    this.baseMaterial = material; // Store base material for switching
+
+    // Add a subtle glow or highlight
+    const glowGeom = new THREE.PlaneGeometry(0.35, 0.45);
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: 0xffffaa,
+      transparent: true,
+      opacity: 0.4,
+      side: THREE.DoubleSide
+    });
+    const glow = new THREE.Mesh(glowGeom, glowMat);
+    glow.rotation.y = Math.PI;
+    glow.position.z = -0.01; // Slightly behind the note
+    this.add(glow);
+    this.glow = glow; // Store reference
+
+    // Add an invisible sphere collider for easier interaction detection
+    const sphereGeom = new THREE.SphereGeometry(0.5, 8, 8);
+    const sphereMat = new THREE.MeshBasicMaterial({
+      visible: false, // Invisible
+      transparent: true,
+      opacity: 0
+    });
+    const sphereCollider = new THREE.Mesh(sphereGeom, sphereMat);
+    this.add(sphereCollider);
+    this.collider = sphereCollider; // Store reference
+
+    if (position) {
+      this.position.copy(position);
+    }
+  }
+
+  update(dt) {
+    if (!this.collected) {
+      // Update shine shader time uniform if using shader
+      if (this.shineMaterial && this.shineMaterial.uniforms) {
+        this.shineMaterial.uniforms.time.value += dt;
+      }
+
+      // Subtle floating/bobbing animation
+      const bobSpeed = 1.5;
+      const bobAmount = 0.1;
+      this.bobOffset += dt * bobSpeed;
+      const bobY = Math.sin(this.bobOffset) * bobAmount;
+      this.mesh.position.y = bobY;
+      this.glow.position.y = bobY;
+      if (this.collider) {
+        this.collider.position.y = bobY;
+      }
+      
+      // Gentle rotation (only rotate around Y axis, not the whole note)
+      this.mesh.rotation.y = Math.PI + Math.sin(this.bobOffset * 0.5) * 0.2;
+    }
+  }
+
+  setShineShader(enabled) {
+    if (this.collected) return; // Don't change collected notes
+    
+    if (enabled && !this.shineMaterial) {
+      // Create shine shader
+      this.shineMaterial = createShineShader();
+      this.mesh.material = this.shineMaterial;
+    } else if (!enabled && this.shineMaterial) {
+      // Switch back to base material
+      this.mesh.material = this.baseMaterial;
+    }
+    this.useShineShader = enabled;
   }
 }
 
@@ -432,23 +596,61 @@ class Game {
 
     // Render setup
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.enabled = true; // Enable shadows
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0a0a0a);
+    // Set background to sky color (will be replaced by skybox)
+    this.scene.background = new THREE.Color(0x87CEEB);
 
     this.camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 100);
     this.camera.position.set(0, CONFIG.player.height, 0);
 
-    // Lighting
-    const ambient = new THREE.AmbientLight(0x404040, 0.8);
+    // Normal Lighting Setup with shadows - Bright interior
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    
+    // Ambient light for overall illumination - increased brightness
+    const ambient = new THREE.AmbientLight(0xffffff, 0.9);
     this.scene.add(ambient);
-    const dir = new THREE.DirectionalLight(0xffffff, 0.7);
-    dir.position.set(5, 8, 5);
-    dir.castShadow = true;
-    this.scene.add(dir);
+    
+    // Main directional light (sunlight) - brighter
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    dirLight.position.set(10, 15, 5);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
+    dirLight.shadow.camera.near = 0.5;
+    dirLight.shadow.camera.far = 50;
+    dirLight.shadow.camera.left = -25;
+    dirLight.shadow.camera.right = 25;
+    dirLight.shadow.camera.top = 25;
+    dirLight.shadow.camera.bottom = -25;
+    dirLight.shadow.bias = -0.0001;
+    this.scene.add(dirLight);
+    
+    // Additional point lights for interior illumination - much brighter
+    const pointLight1 = new THREE.PointLight(0xffffff, 1.0, 25);
+    pointLight1.position.set(0, 2.5, 0);
+    pointLight1.castShadow = true;
+    pointLight1.shadow.mapSize.width = 512;
+    pointLight1.shadow.mapSize.height = 512;
+    this.scene.add(pointLight1);
+    
+    const pointLight2 = new THREE.PointLight(0xffffff, 0.8, 22);
+    pointLight2.position.set(-6, 2.5, -6);
+    this.scene.add(pointLight2);
+    
+    const pointLight3 = new THREE.PointLight(0xffffff, 0.8, 22);
+    pointLight3.position.set(6, 2.5, 6);
+    this.scene.add(pointLight3);
+    
+    // Additional fill light from above
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    fillLight.position.set(0, 5, 0);
+    fillLight.castShadow = false;
+    this.scene.add(fillLight);
 
     // Controls state
     this.yaw = 0;
@@ -464,15 +666,34 @@ class Game {
     this.obstacles = []; // for line-of-sight blocking
     this.interactables = [];
     this.updateables = [];
+    this.passwordPieces = []; // collected password pieces in order
 
     // UI
     dom.fullModeCheckbox.addEventListener('change', () => {
+      const wasPrototypeMode = this.prototypeMode;
       this.prototypeMode = !dom.fullModeCheckbox.checked;
+      
+      // Update note shaders without resetting world
+      if (wasPrototypeMode !== this.prototypeMode) {
+        const useShine = !this.prototypeMode; // Shine in full mode (not prototype)
+        this.interactables.forEach(item => {
+          if (item instanceof Note) {
+            item.setShineShader(useShine);
+          }
+        });
+      }
+      
+      // Only reset world if needed (for now, keep it simple and reset)
       this.resetWorld();
     });
     dom.restartBtn.addEventListener('click', () => {
       this.hideOverlay();
       this.resetWorld();
+    });
+
+    // Note popup close button
+    dom.closeNoteBtn.addEventListener('click', () => {
+      this.hideNotePopup();
     });
 
     window.addEventListener('resize', () => {
@@ -497,27 +718,235 @@ class Game {
     this.obstacles = [];
     this.groundObjects = [];
     this.collected.clear();
+    this.passwordPieces = [];
     this.yaw = 0;
     this.pitch = 0;
     this.velocity.set(0, 0, 0);
     this.isGrounded = false;
     this.camera.position.set(0, CONFIG.player.height, 0);
     this.hideOverlay();
-    dom.paperCount.textContent = '0';
-    dom.codeDisplay.textContent = '_ _ _ _';
-    dom.objective.textContent = 'Move around and test the character controller.';
+    this.hideNotePopup();
+    dom.noteCount.textContent = '0';
+    dom.codeDisplay.textContent = '_ _ _ _ _ _';
+    dom.objective.textContent = 'Find 3 notes with password pieces to unlock the basement.';
 
-    // Simple material for baseplate
-    const protoMat = (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0.0 });
-    const floorMat = protoMat(0x444444);
+    // Materials for house
+    const protoMat = (color) => {
+      return new THREE.MeshStandardMaterial({ 
+        color, 
+        roughness: 0.8, 
+        metalness: 0.0
+      });
+    };
+    const floorMat = protoMat(0x6b5b4f); // Wooden floor
+    const wallMat = protoMat(0x8b7d6b); // Wall color
+    const ceilingMat = protoMat(0x5a5a5a); // Ceiling
+    const doorMat = protoMat(0x4a3a2a); // Dark wood for door
+    const noteMat = protoMat(0xddddcc);
 
-    // Create simple baseplate
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), floorMat);
+    // House dimensions
+    const houseWidth = 12;
+    const houseDepth = 10;
+    const wallHeight = 2.8;
+    const wallThickness = 0.2;
+
+    // Create house group
+    const house = new THREE.Group();
+    this.scene.add(house);
+
+    // Floor (interior)
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(houseWidth, houseDepth),
+      floorMat
+    );
     floor.rotation.x = -Math.PI/2;
+    floor.material.side = THREE.DoubleSide; // Render both sides
     floor.receiveShadow = true;
     floor.position.y = CONFIG.world.floorY;
-    this.scene.add(floor);
+    house.add(floor);
     this.groundObjects.push(floor);
+
+    // Helper function to create walls
+    const createWall = (width, height, depth, x, y, z, rotationY = 0) => {
+      const wall = new THREE.Mesh(
+        new THREE.BoxGeometry(width, height, depth),
+        wallMat
+      );
+      wall.position.set(x, y, z);
+      wall.rotation.y = rotationY;
+      wall.castShadow = true;
+      wall.receiveShadow = true;
+      house.add(wall);
+      this.obstacles.push(wall);
+      return wall;
+    };
+
+    // Front wall (with opening for entrance - we'll add door later)
+    createWall(houseWidth, wallHeight, wallThickness, 0, wallHeight/2, -houseDepth/2);
+    
+    // Back wall (with basement door opening)
+    const backWallLeft = createWall(houseWidth/2 - 1.2, wallHeight, wallThickness, -(houseWidth/2 - 1.2)/2 - 0.6, wallHeight/2, houseDepth/2);
+    const backWallRight = createWall(houseWidth/2 - 1.2, wallHeight, wallThickness, (houseWidth/2 - 1.2)/2 + 0.6, wallHeight/2, houseDepth/2);
+    
+    // Left wall
+    createWall(wallThickness, wallHeight, houseDepth, -houseWidth/2, wallHeight/2, 0);
+    
+    // Right wall
+    createWall(wallThickness, wallHeight, houseDepth, houseWidth/2, wallHeight/2, 0);
+
+    // Ceiling
+    const ceiling = new THREE.Mesh(
+      new THREE.PlaneGeometry(houseWidth, houseDepth),
+      ceilingMat
+    );
+    ceiling.rotation.x = Math.PI/2;
+    ceiling.material.side = THREE.DoubleSide; // Render both sides
+    ceiling.receiveShadow = true;
+    ceiling.position.y = wallHeight;
+    house.add(ceiling);
+
+    // Basement door (visual only - no functionality yet)
+    const basementDoorFrame = new THREE.Group();
+    basementDoorFrame.position.set(0, wallHeight/2 - 0.5, houseDepth/2 + wallThickness/2);
+    
+    // Door frame (top)
+    const doorFrameTop = new THREE.Mesh(
+      new THREE.BoxGeometry(2.0, 0.15, 0.1),
+      wallMat
+    );
+    doorFrameTop.position.set(0, 1.0, 0);
+    doorFrameTop.castShadow = true;
+    doorFrameTop.receiveShadow = true;
+    basementDoorFrame.add(doorFrameTop);
+    
+    // Door frame (left side)
+    const doorFrameLeft = new THREE.Mesh(
+      new THREE.BoxGeometry(0.15, 2.0, 0.1),
+      wallMat
+    );
+    doorFrameLeft.position.set(-1.0, 0, 0);
+    doorFrameLeft.castShadow = true;
+    doorFrameLeft.receiveShadow = true;
+    basementDoorFrame.add(doorFrameLeft);
+    
+    // Door frame (right side)
+    const doorFrameRight = new THREE.Mesh(
+      new THREE.BoxGeometry(0.15, 2.0, 0.1),
+      wallMat
+    );
+    doorFrameRight.position.set(1.0, 0, 0);
+    doorFrameRight.castShadow = true;
+    doorFrameRight.receiveShadow = true;
+    basementDoorFrame.add(doorFrameRight);
+    
+    // Basement door itself
+    const basementDoor = new THREE.Mesh(
+      new THREE.BoxGeometry(1.9, 1.9, 0.05),
+      doorMat
+    );
+    basementDoor.position.set(0, 0, 0.03);
+    basementDoor.castShadow = true;
+    basementDoor.receiveShadow = true;
+    basementDoorFrame.add(basementDoor);
+    this.basementDoor = basementDoor; // Store reference for later
+    
+    // Add door lock visual (small padlock)
+    const lockGeom = new THREE.CylinderGeometry(0.08, 0.08, 0.05, 16);
+    const lockMaterial = protoMat(0x333333); // Dark metal
+    const lock = new THREE.Mesh(lockGeom, lockMaterial);
+    lock.rotation.z = Math.PI/2;
+    lock.position.set(0.7, 0.3, 0.08);
+    lock.castShadow = true;
+    basementDoorFrame.add(lock);
+    
+    house.add(basementDoorFrame);
+    
+    // Add door frame parts as obstacles
+    this.obstacles.push(doorFrameTop);
+    this.obstacles.push(doorFrameLeft);
+    this.obstacles.push(doorFrameRight);
+    this.obstacles.push(basementDoor); // Door itself is also an obstacle
+
+    // Ground plane outside house (for walking around)
+    const groundPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(50, 50),
+      protoMat(0x3a3a3a)
+    );
+    groundPlane.rotation.x = -Math.PI/2;
+    groundPlane.material.side = THREE.DoubleSide;
+    groundPlane.receiveShadow = true;
+    groundPlane.position.y = CONFIG.world.floorY;
+    this.scene.add(groundPlane);
+    this.groundObjects.push(groundPlane);
+    
+    // Add skybox with gradient effect
+    const skyGeometry = new THREE.SphereGeometry(200, 32, 32);
+    // Create gradient skybox shader
+    const skyMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        topColor: { value: new THREE.Color(0x87CEEB) }, // Sky blue
+        bottomColor: { value: new THREE.Color(0xE0E0E0) }, // Light gray
+        offset: { value: 0.5 },
+        exponent: { value: 0.6 }
+      },
+      vertexShader: `
+        varying vec3 vWorldPosition;
+        void main() {
+          vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = worldPosition.xyz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 topColor;
+        uniform vec3 bottomColor;
+        uniform float offset;
+        uniform float exponent;
+        varying vec3 vWorldPosition;
+        void main() {
+          float h = normalize(vWorldPosition).y;
+          float f = pow(max(0.0, h + offset), exponent);
+          gl_FragColor = vec4(mix(bottomColor, topColor, f), 1.0);
+        }
+      `,
+      side: THREE.BackSide,
+      depthWrite: false
+    });
+    const skybox = new THREE.Mesh(skyGeometry, skyMaterial);
+    skybox.renderOrder = -1000; // Render first
+    this.scene.add(skybox);
+
+    // Place 3 notes in good hiding spots inside the house
+    const notes = [
+      {
+        passwordPiece: '12',
+        content: 'I found this note hidden behind the old bookshelf.\n\nPassword piece: 12',
+        position: new THREE.Vector3(-4, CONFIG.player.height * 0.6, -3) // Left side of house
+      },
+      {
+        passwordPiece: '34',
+        content: 'This was tucked under a loose floorboard.\n\nPassword piece: 34',
+        position: new THREE.Vector3(3, CONFIG.player.height * 0.5, 2) // Right side of house
+      },
+      {
+        passwordPiece: '56',
+        content: 'Hidden in a crack in the wall.\n\nPassword piece: 56',
+        position: new THREE.Vector3(-2, CONFIG.player.height * 0.7, -4) // Front area
+      }
+    ];
+
+    for (const noteData of notes) {
+      const note = new Note({
+        passwordPiece: noteData.passwordPiece,
+        content: noteData.content,
+        material: noteMat,
+        position: noteData.position,
+        useShineShader: !this.prototypeMode // Use shine shader in full mode
+      });
+      this.scene.add(note);
+      this.interactables.push(note);
+      this.updateables.push(note); // Add to updateables for animation
+    }
   }
 
   checkGrounded() {
@@ -559,13 +988,13 @@ class Game {
     // Clamp pitch to prevent flipping
     this.pitch = THREE.MathUtils.clamp(this.pitch, -Math.PI/2, Math.PI/2);
 
-    // Turn from keyboard
+    // Turn from keyboard (Q and arrow keys only - E is reserved for interaction)
     const turningLeft = this.input.keys.has('arrowleft') || this.input.keys.has('q');
-    const turningRight = this.input.keys.has('arrowright') || (this.input.keys.has('e') && !this.input.consumeInteract());
+    const turningRight = this.input.keys.has('arrowright');
     if (turningLeft) this.yaw += CONFIG.player.turnSpeed * dt;
     if (turningRight) this.yaw -= CONFIG.player.turnSpeed * dt;
 
-    // Update camera rotation (yaw and pitch)
+    // Update camera rotation (yaw and pitch) - do this BEFORE interaction check
     const quat = new THREE.Quaternion();
     quat.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
     this.camera.quaternion.copy(quat);
@@ -589,13 +1018,81 @@ class Game {
       }
     }
 
-    // Horizontal movement input
+    // Calculate forward/right vectors AFTER camera rotation is updated
     const forward = new THREE.Vector3(0,0,-1).applyQuaternion(this.camera.quaternion);
     const right = new THREE.Vector3(1,0,0).applyQuaternion(this.camera.quaternion);
     forward.y = 0; // Remove vertical component
     right.y = 0;
     forward.normalize();
     right.normalize();
+
+    // Interaction check (E key or interact button)
+    // Use distance-based check instead of raycast for more reliable interaction
+    let interactionHandled = false;
+    if (this.interactables.length > 0) {
+      const interact = this.input.consumeInteract();
+      if (interact) {
+        // Check distance to all interactables
+        const playerPos = this.camera.position;
+        let closestNote = null;
+        let closestDistance = Infinity;
+        
+        for (const interactable of this.interactables) {
+          if (interactable instanceof Note && !interactable.collected) {
+            const distance = playerPos.distanceTo(interactable.position);
+            if (distance < CONFIG.interact.distance && distance < closestDistance) {
+              closestDistance = distance;
+              closestNote = interactable;
+            }
+          }
+        }
+        
+        if (closestNote) {
+          interactionHandled = true;
+          // Show note popup
+          this.showNotePopup(closestNote);
+          // Collect password piece if not already collected
+          if (!closestNote.collected) {
+            closestNote.collected = true;
+            this.passwordPieces.push(closestNote.passwordPiece);
+            // Hide the note visually (make it transparent)
+            closestNote.traverse(child => {
+              if (child.isMesh && child.material) {
+                child.material.transparent = true;
+                child.material.opacity = 0.3;
+              }
+            });
+            // Update UI
+            dom.noteCount.textContent = this.passwordPieces.length;
+            const password = this.passwordPieces.join('');
+            dom.codeDisplay.textContent = password.padEnd(6, '_').split('').join(' ');
+            if (this.passwordPieces.length === 3) {
+              dom.objective.textContent = 'Return to the basement door to unlock it.';
+            } else {
+              dom.objective.textContent = `Find ${3 - this.passwordPieces.length} more note(s) to unlock the basement.`;
+            }
+          }
+        } else {
+          // Try raycast for other interactables
+          this.raycaster.set(this.camera.position, forward);
+          this.raycaster.far = CONFIG.interact.distance;
+          const candidates = this.raycaster.intersectObjects(this.interactables, true);
+          if (candidates.length > 0 && candidates[0].distance < CONFIG.interact.distance) {
+            const hit = candidates[0].object;
+            // Find parent interactable
+            let node = hit;
+            while (node && !node.isInteractable) node = node.parent;
+            if (node && node.isInteractable) {
+              interactionHandled = true;
+              if (node.onInteract) {
+                node.onInteract();
+              }
+            }
+          }
+        }
+      }
+    }
+
 
     const horizontalVel = new THREE.Vector3();
     if (this.input.keys.has('w') || this.input.keys.has('arrowup')) horizontalVel.add(forward);
@@ -671,24 +1168,6 @@ class Game {
     // Apply position
     this.camera.position.copy(newPos);
 
-    // Interaction ray from camera forward (if there are interactables)
-    if (this.interactables.length > 0) {
-      const interact = this.input.consumeInteract();
-      this.raycaster.set(this.camera.position, forward);
-      const candidates = this.raycaster.intersectObjects(this.interactables, true);
-      if (candidates.length > 0 && candidates[0].distance < CONFIG.interact.distance) {
-        const hit = candidates[0].object;
-        // Find parent interactable
-        let node = hit;
-        while (node && !node.isInteractable) node = node.parent;
-        if (node && node.isInteractable && interact) {
-          if (node.onInteract) {
-            node.onInteract();
-          }
-        }
-      }
-    }
-
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -698,6 +1177,15 @@ class Game {
   }
   hideOverlay() {
     dom.overlay.classList.remove('show');
+  }
+
+  showNotePopup(note) {
+    dom.noteText.textContent = note.content;
+    dom.notePopup.classList.add('show');
+  }
+
+  hideNotePopup() {
+    dom.notePopup.classList.remove('show');
   }
 }
 
