@@ -429,10 +429,33 @@ class Game {
     const horizontalMovement = new T.Vector3(movement.x, 0, movement.z);
     if (horizontalMovement.lengthSq() > 0 && this.obstacles.length > 0) {
       const raycaster = new T.Raycaster();
-      raycaster.set(this.camera.position, horizontalMovement.clone().normalize());
-      raycaster.far = horizontalMovement.length() + CONFIG.player.radius;
-      const hits = raycaster.intersectObjects(this.obstacles, true);
-      if (hits.length > 0 && hits[0].distance < horizontalMovement.length() + CONFIG.player.radius) {
+      const moveDir = horizontalMovement.clone().normalize();
+      const moveDist = horizontalMovement.length();
+      
+      // Check multiple points along the player's height
+      const feetY = this.camera.position.y - CONFIG.player.height;
+      const headY = this.camera.position.y;
+      const checkHeights = [
+        feetY + 0.1,                           // Near feet
+        feetY + CONFIG.player.height * 0.33,   // Lower body
+        feetY + CONFIG.player.height * 0.66,   // Upper body
+        headY - 0.1                            // Near head
+      ];
+      
+      let collisionDetected = false;
+      
+      for (const checkY of checkHeights) {
+        raycaster.set(new T.Vector3(newPos.x, checkY, newPos.z), moveDir);
+        raycaster.far = moveDist + CONFIG.player.radius;
+        
+        const hits = raycaster.intersectObjects(this.obstacles, true);
+        if (hits.length > 0 && hits[0].distance < moveDist + CONFIG.player.radius) {
+          collisionDetected = true;
+          break;
+        }
+      }
+      
+      if (collisionDetected) {
         // Collision detected, don't move horizontally
         newPos.x = this.camera.position.x;
         newPos.z = this.camera.position.z;
@@ -449,6 +472,7 @@ class Game {
       raycaster.set(new T.Vector3(newPos.x, feetY + 0.1, newPos.z), new T.Vector3(0, -1, 0));
       raycaster.far = Math.abs(movement.y) + 0.2;
       const hits = raycaster.intersectObjects(this.groundObjects, true);
+      
       if (hits.length > 0) {
         const groundY = hits[0].point.y + CONFIG.player.height;
         if (newPos.y <= groundY) {
@@ -460,7 +484,7 @@ class Game {
         // No ground found, keep falling
         this.isGrounded = false;
       }
-    } else {
+    } else if (movement.y > 0) {
       // Moving up - check for ceiling collision
       if (this.obstacles.length > 0) {
         const headY = this.camera.position.y;
@@ -468,6 +492,7 @@ class Game {
         raycaster.set(new T.Vector3(newPos.x, headY, newPos.z), new T.Vector3(0, 1, 0));
         raycaster.far = movement.y + 0.2;
         const hits = raycaster.intersectObjects(this.obstacles, true);
+        
         if (hits.length > 0 && hits[0].distance < movement.y + 0.2) {
           newPos.y = this.camera.position.y;
           this.velocity.y = 0;
