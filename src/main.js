@@ -37,7 +37,7 @@ const CONFIG = {
     fov: T.MathUtils.degToRad(35),
   },
   interact: {
-    distance: 1.5, // Increased interaction distance
+    distance: 2.5, // Increased interaction distance
   },
   world: {
     gravity: -15.0, // gravity acceleration
@@ -533,19 +533,16 @@ class Game {
 
     // Find closest interactable within horizontal (x,z) distance
     for (const interactable of this.interactables) {
-      const dx = playerPos.x - interactable.position.x;
-      const dz = playerPos.z - interactable.position.z;
-      const dist = Math.sqrt(dx * dx + dz * dz); // only x,z
+      const dist = playerPos.distanceTo(interactable.position);
 
       if (dist < closestDist) {
         closestDist = dist;
         closest = interactable;
       }
     }
-
+    const interact = this.input.consumeInteract();
     if(closestDist <= CONFIG.interact.distance) {
-      if (this.input.interactRequested) {
-        this.input.consumeInteract();
+      if (interact) {
         if (closest instanceof inter_objs.InteractiveNote) {
           this.noteInteraction(closest);
         } else {

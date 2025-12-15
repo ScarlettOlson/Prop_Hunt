@@ -1,6 +1,6 @@
 import * as THREE from '../CS559-Three/build/three.module.js';
 import { loadTextureSafely, createShineShader} from './load_texture.js'
-import { Door, Note, SlidingDrawer } from './objects.js';
+import { Door, Note, SlidingDrawer, Cabinet } from './objects.js';
 
 
 
@@ -149,7 +149,7 @@ export class InteractiveDoor extends Interactable {
  * Simple sliding drawer
  */
 export class InteractiveDrawer extends Interactable {
-  constructor({ x, y, z, w, h, d, extend=0.35, drawerMat, handleMat, rotationY=0 }) {
+  constructor({ x, y, z, w, h, d, extend=0.75, drawerMat, handleMat, rotationY=0 }) {
     super({ label: 'Drawer', hint: 'Open/Close (E)' });
     this.open = false;
     this.extend = extend;
@@ -183,6 +183,48 @@ export class Paper extends Interactable {
     mesh.rotation.x = -Math.PI/2; // lying on surface by default
     mesh.castShadow = true; mesh.receiveShadow = true;
     this.add(mesh);
+  }
+}
+
+export class InteractableCabinet extends Interactable {
+  constructor({ x, y, z, w, h, d, cabinetMat, handleMat, rotationY, label = 'Cabinet Door' }) {
+    super({ label, hint: 'Open/Close (E)' });
+    this.position.set(x, y, z);
+    
+    // Create the cabinet door
+    this.cabinet = new Cabinet({ x:0, y:0, z:0, w, h, d, cabinetMat, handleMat, rotationY });
+    this.add(this.cabinet);
+    
+    // Door state
+    this.isOpen = false;
+    this.openAngle = -75*Math.PI / 180; // 90 degrees open
+    this.closedAngle = 0;
+    this.animationSpeed = 3; // radians per second
+    this.hing = hint;
+  }
+  
+  onInteract() {
+    this.isOpen = !this.isOpen;
+  }
+  
+  update(deltaTime) {
+    
+    const targetAngle = this.isOpen ? this.openAngle : this.closedAngle;
+    const currentAngle = this.cabinet.hinge.rotation.y;
+    const angleDiff = targetAngle - currentAngle;
+    
+    if (Math.abs(angleDiff) < 0.01) {
+      // Close enough, snap to target
+      this.cabinet.hinge.rotation.y = targetAngle;
+    } else {
+      // Smoothly animate towards target
+      const step = Math.sign(angleDiff) * this.animationSpeed * deltaTime;
+      if (Math.abs(step) > Math.abs(angleDiff)) {
+        this.cabinet.hinge.rotation.y = targetAngle;
+      } else {
+        this.cabinet.hinge.rotation.y += step;
+      }
+    }
   }
 }
 
