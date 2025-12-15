@@ -35,11 +35,18 @@ export function createHouse(w, h, d, t, floorMat, wallMat, frameMat, doorMat, ha
     bedrooms.obstacles.forEach(obj => obstacles.push(obj));
     bedrooms.interactables.forEach(obj => interactables.push(obj));
 
+    // Create the furniture inside of the bedrooms
+    const bedroomFurniture = createBedroomFurniture(doorMat, wallMat);
+    bedroomFurniture.objects.forEach(obj => house.add(obj));
+    bedroomFurniture.obstacles.forEach(obj => obstacles.push(obj));
+    bedroomFurniture.interactables.forEach(obj => interactables.push(obj));
+
     
     const kitchen = createKitchen({
-        x:4, y:0, z:7, 
+        x:7, y:0, z:6.5, 
         w:6, h:h, d:7,
-        wallT:t, wallMat:wallMat, drawerMat:doorMat, handleMat
+        wallT:t, wallMat:wallMat, drawerMat:doorMat, handleMat,
+        doorW, doorH
     });
     kitchen.objects.forEach(obj => house.add(obj));
     kitchen.obstacles.forEach(obj => obstacles.push(obj));
@@ -94,7 +101,7 @@ export function createHouseExterior(w, h, d, t, floorMat, wallMat, frameMat, doo
     const frontCenterWindow = new WallWithWindow({
         x:4, y:h/2, z:frontZ,
         w:4, h:h, t:t,
-        winX:0, winY:winY, winW:winW, winH:winH,
+        winX:-1, winY:winY, winW:winW, winH:winH,
         wallMat:wallMat, frameMat:frameMat, glassMat:windowMat, rotationY: 0
     });
     const frontRightWindow = new WallWithWindow({
@@ -276,12 +283,41 @@ export function createBedroomWalls(h, t, doorW, doorH, wallMat, frameMat, doorMa
     return { group, obstacles, interactables };
 }
 
+export function createBedroomFurniture(mattressMat, frameMat) {
+  let objects = [];
+  let obstacles = [];
+  let interactables = [];
+
+  const bed1 = new Bed({
+    x: -9.1, y:0, z:8.4, w:1.5, h:2, d:3, mattressH: 0.5, 
+    mattressMat:mattressMat, frameMat:frameMat,
+    rotationY:Math.PI
+  });
+  const bed2 = new Bed({
+    x: -8.4, y:0, z:1.1, w:1.5, h:2, d:3, mattressH: 0.5, 
+    mattressMat:mattressMat, frameMat:frameMat,
+    rotationY:Math.PI/2
+  });
+  const bed3 = new Bed({
+    x: -9.1, y:0, z:-8.4, w:1.5, h:2, d:3, mattressH: 0.5, 
+    mattressMat:mattressMat, frameMat:frameMat,
+    rotationY:0
+  });
+  objects.push(bed1);
+  obstacles.push(bed1);
+  objects.push(bed2);
+  obstacles.push(bed2);
+  objects.push(bed3);
+  obstacles.push(bed3);
+
+  return { objects, obstacles, interactables }
+}
+
 export function createKitchen({
   x, y, z, w, h, d,
   wallT, wallMat, drawerMat, handleMat,
-  doorW = 1.5, doorH = 2.5, rotationY = 0
+  doorW, doorH, rotationY = 0
 }) {
-  const group = new T.Group();
   let objects = [];
   let obstacles = [];
   let interactables = [];
@@ -297,7 +333,7 @@ export function createKitchen({
   });
 
   const diningRoomPassage = new WallWithPassage({
-    x: x, y: y=(h/2), z: z + (-d/2),
+    x: x, y: y+(h/2), z: z + (-d/2),
     w: w, h, t: wallT,
     passageX: 0, passageW: doorW, passageH: doorH,
     wallMat, rotationY: 0
@@ -308,13 +344,14 @@ export function createKitchen({
   obstacles.push(hallPassage, diningRoomPassage);
 
   // --- Drawers along one wall (relative placement) ---
-  const drawerSize = w / 5;
-  for (let i = -1; i < 5; i++) {
+  const drawerW = w / 5;
+  //const drawerH = 1.25 * drawerW;
+  for (let i = -2; i < 2; i++) {
     const drawer = new InteractiveDrawer({
-      x: x + wallT/2 + (i * drawerSize),
-      y: y - drawerSize,
-      z: z + (d-drawerSize) / 2,
-      w: drawerSize, h: drawerSize, d: drawerSize,
+      x: x + wallT/2 + (i * drawerW),
+      y: y + drawerW/2,
+      z: z + (d-drawerW) / 2,
+      w: drawerW, h: drawerW, d: drawerW,
       drawerMat, handleMat, rotationY: Math.PI
     });
     objects.push(drawer)
@@ -629,11 +666,64 @@ export class Cabinet extends T.Group {
   }
 }
 
+export class Bed extends T.Group {
+  constructor({ x, y, z, w, h, d, mattressH, mattressMat, frameMat, rotationY }) {
+    super();
+    
+    // Position the whole bed group
+    this.position.set(x, y, z);
+    this.rotation.y = rotationY;
+    
+    // --- Four leg posts ---
+    const postRadius = w / 40;
+    const postHeight = h / 6;
+    const postGeom = new T.CylinderGeometry(postRadius, postRadius, postHeight, 16);
+    
+    // Front left post
+    const frontLeft = new T.Mesh(postGeom, frameMat);
+    frontLeft.position.set(-w / 2 + postRadius * 2, postHeight / 2, d / 2 - postRadius * 2);
+    this.add(frontLeft);
+    
+    // Front right post
+    const frontRight = new T.Mesh(postGeom, frameMat);
+    frontRight.position.set(w / 2 - postRadius * 2, postHeight / 2, d / 2 - postRadius * 2);
+    this.add(frontRight);
+    
+    // Back left post
+    const backLeft = new T.Mesh(postGeom, frameMat);
+    backLeft.position.set(-w / 2 + postRadius * 2, postHeight / 2, -d / 2 + postRadius * 2);
+    this.add(backLeft);
+    
+    // Back right post
+    const backRight = new T.Mesh(postGeom, frameMat);
+    backRight.position.set(w / 2 - postRadius * 2, postHeight / 2, -d / 2 + postRadius * 2);
+    this.add(backRight);
+    
+    // --- Mattress ---
+    const mattressGeom = new T.BoxGeometry(w, mattressH, d);
+    const mattressMesh = new T.Mesh(mattressGeom, mattressMat);
+    mattressMesh.position.set(0, postHeight + mattressH / 2, 0);
+    this.add(mattressMesh);
+    
+    // --- Headboard ---
+    const headboardThickness = w / 20;
+    const headboardHeight = h * 0.6;
+    const headboardGeom = new T.BoxGeometry(w, headboardHeight, headboardThickness);
+    const headboardMesh = new T.Mesh(headboardGeom, frameMat);
+    headboardMesh.position.set(0, postHeight + headboardHeight / 2, -d / 2 - headboardThickness / 2);
+    this.add(headboardMesh);
+    
+    // Store references
+    this.mattress = mattressMesh;
+    this.headboard = headboardMesh;
+    this.posts = [frontLeft, frontRight, backLeft, backRight];
+  }
+}
+
 
 export class SlidingDrawer extends T.Group {
   constructor({ x, y, z, w, h, d, drawerMat, handleMat, rotationY }) {
     super();
-
     // Position the whole drawer group
     this.position.set(x, y, z);
     this.rotation.y = rotationY;
@@ -645,26 +735,74 @@ export class SlidingDrawer extends T.Group {
     bodyMesh.position.set(0, -h / 6, 0); // center body in lower part
     this.add(bodyMesh);
 
-    // --- Drawer (top 1/3) ---
-    const drawerHeight = h / 3;
-    const drawerGeom = new T.BoxGeometry(w, drawerHeight, d);
-    this.drawer = new T.Mesh(drawerGeom, drawerMat);
-    this.drawer.position.set(0, h / 3, 0); // sits on top of body
+    // --- Fixed top surface (doesn't move when drawer opens) ---
+    const topThickness = h / 20; // thin top surface
+    const topGeom = new T.BoxGeometry(w, topThickness, d);
+    const topMesh = new T.Mesh(topGeom, drawerMat);
+    topMesh.position.set(0, h / 2 - topThickness, 0);
+    this.add(topMesh);
+
+    // --- Sliding drawer box (open front) ---
+    const drawerHeight = h / 3 - topThickness;
+    const drawerDepth = d; // full depth to align with front
+    const wallThickness = w / 20;
+
+    this.drawer = new T.Group();
+    this.drawer.position.set(0, drawerHeight, 0); // align with top of body
     this.add(this.drawer);
 
-    // --- Handle ---
-    const handleRadius = w / 10;
-    const handleLength = d / 10;
-    const handleGeom = new T.CylinderGeometry(handleRadius, handleRadius, handleLength, 16);
-    const handleMesh = new T.Mesh(handleGeom, handleMat);
+    // Drawer bottom
+    const bottomGeom = new T.BoxGeometry(w, wallThickness, drawerDepth);
+    const bottomMesh = new T.Mesh(bottomGeom, drawerMat);
+    bottomMesh.position.set(0, -drawerHeight / 2 + wallThickness / 2, 0);
+    this.drawer.add(bottomMesh);
 
-    // Rotate cylinder to stick out from drawer front
-    handleMesh.rotation.x = Math.PI / 2;
-    handleMesh.position.set(0, 0, d / 2 + handleLength / 2);
-    this.drawer.add(handleMesh);
+    // Drawer back
+    const backGeom = new T.BoxGeometry(w, drawerHeight, wallThickness);
+    const backMesh = new T.Mesh(backGeom, drawerMat);
+    backMesh.position.set(0, 0, -drawerDepth / 2 + wallThickness / 2);
+    this.drawer.add(backMesh);
 
-    // Store references for later animation
-    this.handle = handleMesh;
+    // Drawer left side
+    const sideGeom = new T.BoxGeometry(wallThickness, drawerHeight, drawerDepth);
+    const leftMesh = new T.Mesh(sideGeom, drawerMat);
+    leftMesh.position.set(-w / 2 + wallThickness / 2, 0, 0);
+    this.drawer.add(leftMesh);
+
+    // Drawer right side
+    const rightMesh = new T.Mesh(sideGeom, drawerMat);
+    rightMesh.position.set(w / 2 - wallThickness / 2, 0, 0);
+    this.drawer.add(rightMesh);
+
+    // Drawer front face
+    const frontGeom = new T.BoxGeometry(w, drawerHeight, wallThickness);
+    const frontMesh = new T.Mesh(frontGeom, drawerMat);
+    frontMesh.position.set(0, 0, drawerDepth / 2 - wallThickness / 2);
+    this.drawer.add(frontMesh);
+
+    // --- Improved Handle (cylinder + sphere) ---
+    const handleRadius = w / 15; // smaller than before
+    const handleLength = d / 12;
+    const handleGeom = new T.CylinderGeometry(
+      handleRadius,
+      handleRadius,
+      handleLength,
+      16
+    );
+    const handleCylinder = new T.Mesh(handleGeom, handleMat);
+    handleCylinder.rotation.x = Math.PI / 2;
+
+    // Sphere at end of handle
+    const sphereGeom = new T.SphereGeometry(handleRadius * 1.5, 16, 16);
+    const handleSphere = new T.Mesh(sphereGeom, handleMat);
+    handleSphere.position.set(0, 0, handleLength / 2);
+
+    // Group handle parts
+    this.handle = new T.Group();
+    this.handle.add(handleCylinder);
+    this.handle.add(handleSphere);
+    this.handle.position.set(0, 0, drawerDepth / 2 + handleLength / 2);
+    this.drawer.add(this.handle);
   }
 }
 
