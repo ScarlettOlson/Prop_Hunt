@@ -98,6 +98,34 @@ class Game {
     this.camera = new T.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
     this.camera.position.set(0, CONFIG.player.height, 0);
 
+    // Audio Initialization
+    this.listener = new T.AudioListener();
+    this.camera.add(this.listener);
+
+    const audioLoader = new T.AudioLoader();
+
+    // Ambient Music
+    const ambientSound = new T.Audio(this.listener);
+    audioLoader.load('assets/ambient music.mp3', (buffer) => {
+      ambientSound.setBuffer(buffer);
+      ambientSound.setLoop(true);
+      ambientSound.setVolume(0.5);
+      ambientSound.play();
+    });
+    this.ambientSound = ambientSound;
+
+    // Interaction Sounds
+    this.drawerBuffer = null;
+    audioLoader.load('assets/drawer.mp3', (buffer) => {
+      this.drawerBuffer = buffer;
+      // Apply to existing objects if they are already created
+      this.interactables.forEach(obj => {
+        if (obj.initAudio && (obj instanceof inter_objs.InteractiveDrawer || obj instanceof inter_objs.InteractiveCabinet)) {
+          obj.initAudio(this.listener, buffer);
+        }
+      });
+    });
+
     // Create Ambient Lighting
     const ambient = new T.AmbientLight(0xffffff, 0.9);
     this.scene.add(ambient);
@@ -230,6 +258,15 @@ class Game {
       this.interactables.push(obj);
       this.updateables.push(obj);
     });
+
+    // Initialize audio for interactables if buffer is ready
+    if (this.drawerBuffer) {
+      this.interactables.forEach(obj => {
+        if (obj.initAudio && (obj instanceof inter_objs.InteractiveDrawer || obj instanceof inter_objs.InteractiveCabinet)) {
+          obj.initAudio(this.listener, this.drawerBuffer);
+        }
+      });
+    }
 
 
     // Create a Ground plane
