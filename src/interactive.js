@@ -160,7 +160,22 @@ export class InteractiveDrawer extends Interactable {
     this.add(mesh);
     this.drawer = mesh.drawer;
   }
-  onInteract() { this.open = !this.open; }
+  onInteract() {
+    this.open = !this.open;
+    if (this.sound && this.sound.buffer) {
+      if (this.sound.isPlaying) this.sound.stop();
+      this.sound.play();
+    }
+  }
+
+  initAudio(listener, buffer) {
+    this.sound = new THREE.PositionalAudio(listener);
+    this.sound.setBuffer(buffer);
+    this.sound.setRefDistance(1);
+    this.sound.setVolume(1.0);
+    this.add(this.sound);
+  }
+
   update(dt) {
     let target = 0;
     if(this.open) {
@@ -192,8 +207,21 @@ export class InteractiveCabinet extends Interactable {
   
   onInteract() {
     this.isOpen = !this.isOpen;
+    if (this.sound && this.sound.buffer) {
+      if (this.sound.isPlaying) this.sound.stop();
+      this.sound.play();
+    }
   }
-  
+
+  initAudio(listener, buffer) {
+    this.sound = new THREE.PositionalAudio(listener);
+    this.sound.setBuffer(buffer);
+    this.sound.setRefDistance(1);
+    this.sound.setVolume(1.0);
+    this.add(this.sound);
+  }
+
+
   update(deltaTime) {
     
     const targetAngle = this.isOpen ? this.openAngle : this.closedAngle;
