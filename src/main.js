@@ -2,6 +2,7 @@ import * as T from '../CS559-Three/build/three.module.js';
 import { loadTextureSafely, createShineShader } from './load_texture.js';
 import { Input } from './input_manager.js';
 import * as inter_objs from './interactive.js';
+import { BasementDoor } from './interactive.js';
 import { createDirectionalLight, createPointLight } from './light.js';
 import * as objs from './objects.js';
 
@@ -94,17 +95,17 @@ class Game {
     // Setup Scene and Camera
     this.scene = new T.Scene();
     this.scene.background = new T.Color(0x87CEEB);
-    this.camera = new T.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 100);
+    this.camera = new T.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
     this.camera.position.set(0, CONFIG.player.height, 0);
-    
+
     // Create Ambient Lighting
     const ambient = new T.AmbientLight(0xffffff, 0.9);
     this.scene.add(ambient);
-    
+
     // Create sunlight
     const dirLight = createDirectionalLight(10, 15, 5, 0xffffff, 1.2)
     this.scene.add(dirLight);
-    
+
     // Create ceiling lights as point lights
     const ceilingLight1 = createPointLight(0, 2.5, 0, 0xffffff, 1.0, 25);
     const ceilingLight2 = createPointLight(-6, 2.5, -6, 0xffffff, 0.8, 22);
@@ -133,7 +134,7 @@ class Game {
     dom.fullModeCheckbox.addEventListener('change', () => {
       const wasPrototypeMode = this.prototypeMode;
       this.prototypeMode = !dom.fullModeCheckbox.checked;
-      
+
       // Update note shaders without resetting world
       if (wasPrototypeMode !== this.prototypeMode) {
         const useShine = !this.prototypeMode; // Shine in full mode (not prototype)
@@ -143,7 +144,7 @@ class Game {
           }
         });
       }
-      
+
       // Only reset world if needed (for now, keep it simple and reset)
       this.resetWorld();
     });
@@ -167,7 +168,7 @@ class Game {
       console.error(err);
     });
 
-    
+
     this.loop();
   }
 
@@ -196,18 +197,18 @@ class Game {
     dom.objective.textContent = 'Find 3 notes with password pieces to unlock the basement.';
 
     // Materials for house
-    const floorMat      = await loadTextureSafely('textures/floor.jpg',      0x6b5b4f);
-    const wallMat       = await loadTextureSafely('textures/wall.jpg',       0x8b7d6b);
-    const ceilingMat    = await loadTextureSafely('textures/ceiling.jpg',    0x5a5a5a);
-    const doorMat       = await loadTextureSafely('textures/door.jpg',       0x4a3a2a);
-    const bookshelfMat  = await loadTextureSafely('textures/bookshelf.jpg',  0xFF00FF);
-    const frameMat      = await loadTextureSafely('textures/frame.jpg',      0xFF00FF);
-    const noteMat       = await loadTextureSafely('textures/note.jpg',       0xddddcc);
-    const furnitureMat  = await loadTextureSafely('textures/furniture.jpg',  0x5a4a3a);
-    const groundMat     = await loadTextureSafely('textures/ground.jpg',     0x97ff9e);
-    const windowMat = new T.MeshStandardMaterial({ 
-      color: 0x99bbee, 
-      transparent: true, 
+    const floorMat = await loadTextureSafely('textures/floor.jpg', 0x6b5b4f);
+    const wallMat = await loadTextureSafely('textures/wall.jpg', 0x8b7d6b);
+    const ceilingMat = await loadTextureSafely('textures/ceiling.jpg', 0x5a5a5a);
+    const doorMat = await loadTextureSafely('textures/door.jpg', 0x4a3a2a);
+    const bookshelfMat = await loadTextureSafely('textures/bookshelf.jpg', 0xFF00FF);
+    const frameMat = await loadTextureSafely('textures/frame.jpg', 0xFF00FF);
+    const noteMat = await loadTextureSafely('textures/note.jpg', 0xddddcc);
+    const furnitureMat = await loadTextureSafely('textures/furniture.jpg', 0x5a4a3a);
+    const groundMat = await loadTextureSafely('textures/ground.jpg', 0x97ff9e);
+    const windowMat = new T.MeshStandardMaterial({
+      color: 0x99bbee,
+      transparent: true,
       opacity: 0.3,
       roughness: 0.1,
       metalness: 0.1
@@ -230,8 +231,8 @@ class Game {
       floorMat, wallMat, frameMat, doorMat, frameMat, windowMat
     );
     house.add(house_pieces.house);
-    house_pieces.groundObjs.forEach(obj => { this.groundObjects.push(obj)});
-    house_pieces.obstacles.forEach(obj => { this.obstacles.push(obj)});
+    house_pieces.groundObjs.forEach(obj => { this.groundObjects.push(obj) });
+    house_pieces.obstacles.forEach(obj => { this.obstacles.push(obj) });
     house_pieces.interactables.forEach(obj => {
       this.interactables.push(obj);
       this.updateables.push(obj);
@@ -239,14 +240,14 @@ class Game {
 
 
     // Create a Ground plane
-    const ground = new T.Mesh(new T.PlaneGeometry(3*houseWidth , 3*houseDepth), groundMat);
-    ground.rotation.x = -Math.PI/2;
+    const ground = new T.Mesh(new T.PlaneGeometry(3 * houseWidth, 3 * houseDepth), groundMat);
+    ground.rotation.x = -Math.PI / 2;
     ground.position.set(0, 0, 0);
     ground.receiveShadow = true;
     this.scene.add(ground);
-    this.groundObjects.push(ground);    
-  
-    
+    this.groundObjects.push(ground);
+
+
     // Add skybox with gradient effect
     const skyGeometry = new T.SphereGeometry(200, 32, 32);
     // Create gradient skybox shader
@@ -291,19 +292,19 @@ class Game {
         passwordPiece: '12',
         passwordIndex: 0, // First position in password
         content: 'I found this note hidden behind the old bookshelf.\n\nPassword piece: 12',
-        position: new T.Vector3(-4, CONFIG.player.height * 0.6, -3) // Left side of house
+        position: new T.Vector3(0, 1, -2) // Center
       },
       {
         passwordPiece: '34',
         passwordIndex: 1, // Second position in password
         content: 'This was tucked under a loose floorboard.\n\nPassword piece: 34',
-        position: new T.Vector3(3, CONFIG.player.height * 0.5, 2) // Right side of house
+        position: new T.Vector3(2, 1, -2) // Right
       },
       {
         passwordPiece: '56',
         passwordIndex: 2, // Third position in password
         content: 'Hidden in a crack in the wall.\n\nPassword piece: 56',
-        position: new T.Vector3(-2, CONFIG.player.height * 0.7, -4) // Front area
+        position: new T.Vector3(-2, 1, -2) // Left
       }
     ];
 
@@ -332,7 +333,7 @@ class Game {
     );
     raycaster.set(feetPos, new T.Vector3(0, -1, 0));
     raycaster.far = CONFIG.player.groundCheckDistance + 0.15;
-    
+
     const hits = raycaster.intersectObjects(this.groundObjects, true);
     if (hits.length > 0) {
       const hit = hits[0];
@@ -359,7 +360,7 @@ class Game {
     this.input.deltaPitch = 0;
 
     // Clamp pitch to prevent flipping
-    this.pitch = T.MathUtils.clamp(this.pitch, -Math.PI/2, Math.PI/2);
+    this.pitch = T.MathUtils.clamp(this.pitch, -Math.PI / 2, Math.PI / 2);
 
     // Turn from keyboard (Q and arrow keys only - E is reserved for interaction)
     const turningLeft = this.input.keys.has('arrowleft') || this.input.keys.has('q');
@@ -392,8 +393,8 @@ class Game {
     }
 
     // Calculate forward/right vectors AFTER camera rotation is updated
-    const forward = new T.Vector3(0,0,-1).applyQuaternion(this.camera.quaternion);
-    const right = new T.Vector3(1,0,0).applyQuaternion(this.camera.quaternion);
+    const forward = new T.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    const right = new T.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
     forward.y = 0; // Remove vertical component
     right.y = 0;
     forward.normalize();
@@ -432,7 +433,7 @@ class Game {
       const raycaster = new T.Raycaster();
       const moveDir = horizontalMovement.clone().normalize();
       const moveDist = horizontalMovement.length();
-      
+
       // Check multiple points along the player's height
       const feetY = this.camera.position.y - CONFIG.player.height;
       const headY = this.camera.position.y;
@@ -442,20 +443,20 @@ class Game {
         feetY + CONFIG.player.height * 0.66,   // Upper body
         headY - 0.1                            // Near head
       ];
-      
+
       let collisionDetected = false;
-      
+
       for (const checkY of checkHeights) {
         raycaster.set(new T.Vector3(newPos.x, checkY, newPos.z), moveDir);
         raycaster.far = moveDist + CONFIG.player.radius;
-        
+
         const hits = raycaster.intersectObjects(this.obstacles, true);
         if (hits.length > 0 && hits[0].distance < moveDist + CONFIG.player.radius) {
           collisionDetected = true;
           break;
         }
       }
-      
+
       if (collisionDetected) {
         // Collision detected, don't move horizontally
         newPos.x = this.camera.position.x;
@@ -473,7 +474,7 @@ class Game {
       raycaster.set(new T.Vector3(newPos.x, feetY + 0.1, newPos.z), new T.Vector3(0, -1, 0));
       raycaster.far = Math.abs(movement.y) + 0.2;
       const hits = raycaster.intersectObjects(this.groundObjects, true);
-      
+
       if (hits.length > 0) {
         const groundY = hits[0].point.y + CONFIG.player.height;
         if (newPos.y <= groundY) {
@@ -493,7 +494,7 @@ class Game {
         raycaster.set(new T.Vector3(newPos.x, headY, newPos.z), new T.Vector3(0, 1, 0));
         raycaster.far = movement.y + 0.2;
         const hits = raycaster.intersectObjects(this.obstacles, true);
-        
+
         if (hits.length > 0 && hits[0].distance < movement.y + 0.2) {
           newPos.y = this.camera.position.y;
           this.velocity.y = 0;
@@ -511,7 +512,7 @@ class Game {
     dom.message.textContent = text;
     dom.overlay.classList.add('show');
   }
-  
+
   hideOverlay() {
     dom.overlay.classList.remove('show');
   }
@@ -541,12 +542,16 @@ class Game {
       }
     }
     const interact = this.input.consumeInteract();
-    if(closestDist <= CONFIG.interact.distance) {
+    if (closestDist <= CONFIG.interact.distance) {
       if (interact) {
         if (closest instanceof inter_objs.InteractiveNote) {
           this.noteInteraction(closest);
         } else {
           closest.onInteract();
+          // Check for end game condition
+          if (closest instanceof inter_objs.BasementDoor && !closest.isLocked) {
+            this.showOverlay("THE END");
+          }
         }
       }
       else {
@@ -556,7 +561,7 @@ class Game {
     else {
       dom.hint.textContent = ""; // Set the hint blank if no objects are nearby
     }
-    
+
   }
 
 
@@ -587,6 +592,12 @@ class Game {
       dom.codeDisplay.textContent = password.split('').join(' ');
       if (this.passwordPieces.size === 3) {
         dom.objective.textContent = 'Return to the basement door to unlock it.';
+        // Unlock the basement door
+        const basementDoor = this.interactables.find(obj => obj instanceof BasementDoor);
+        if (basementDoor) {
+          basementDoor.unlock();
+          // Silent unlock
+        }
       } else {
         dom.objective.textContent = `Find ${3 - this.passwordPieces.size} more note(s) to unlock the basement.`;
       }
