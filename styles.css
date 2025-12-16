@@ -1,4 +1,5 @@
-html, body {
+html,
+body {
   margin: 0;
   height: 100%;
   background: #000;
@@ -12,18 +13,22 @@ canvas {
 
 #hud {
   position: fixed;
-  top: 10px; left: 10px;
+  top: 10px;
+  left: 10px;
   display: flex;
   gap: 16px;
   align-items: center;
   z-index: 10;
-  background: rgba(0,0,0,0.4);
+  background: rgba(0, 0, 0, 0.4);
   padding: 8px 12px;
   border-radius: 8px;
   backdrop-filter: blur(4px);
 }
 
-#hud .label { font-weight: 700; margin-right: 6px; }
+#hud .label {
+  font-weight: 700;
+  margin-right: 6px;
+}
 
 #overlay {
   position: fixed;
@@ -32,12 +37,16 @@ canvas {
   align-items: center;
   justify-content: center;
   backdrop-filter: blur(3px);
-  background: rgba(0,0,0,0.6);
+  background: rgba(0, 0, 0, 0.6);
   z-index: 20;
   text-align: center;
 }
 
-#overlay.show { display: flex; flex-direction: column; gap: 16px; }
+#overlay.show {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
 
 #message {
   font-size: 1.4rem;
@@ -47,15 +56,26 @@ canvas {
 
 #controls {
   position: fixed;
-  bottom: 12px; left: 12px; right: 12px;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
   display: flex;
   justify-content: space-between;
   z-index: 10;
   pointer-events: auto;
 }
 
-.dpad { display: flex; flex-direction: column; gap: 8px; }
-.actions { display: flex; gap: 8px; align-items: center; }
+.dpad {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
 
 .btn {
   background: #222;
@@ -66,17 +86,26 @@ canvas {
   font-size: 1rem;
 }
 
-.btn:active { background: #444; }
+.btn:active {
+  background: #444;
+}
 
-#modeToggle input { margin-right: 6px; }
+#modeToggle input {
+  margin-right: 6px;
+}
 
 /* Mobile-friendly tap targets */
 @media (max-width: 768px) {
-  .btn { padding: 14px 18px; font-size: 1.1rem; }
+  .btn {
+    padding: 14px 18px;
+    font-size: 1.1rem;
+  }
 }
 
 /* Minimal focus for accessibility */
-.btn:focus-visible { outline: 2px solid #77f; }
+.btn:focus-visible {
+  outline: 2px solid #77f;
+}
 
 /* Note popup */
 .note-popup {
@@ -86,7 +115,7 @@ canvas {
   align-items: center;
   justify-content: center;
   backdrop-filter: blur(5px);
-  background: rgba(0,0,0,0.7);
+  background: rgba(0, 0, 0, 0.7);
   z-index: 30;
 }
 
@@ -104,7 +133,7 @@ canvas {
   max-height: 80vh;
   overflow-y: auto;
   position: relative;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
 .close-btn {
@@ -140,4 +169,49 @@ canvas {
   color: #ddd;
   white-space: pre-wrap;
   padding-top: 8px;
+}
+
+/* Story Popup */
+.story-popup {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.9);
+  z-index: 100;
+  flex-direction: column;
+}
+
+.story-content {
+  max-width: 600px;
+  text-align: center;
+  color: #eee;
+  padding: 40px;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.story-content p {
+  font-size: 1.4rem;
+  margin-bottom: 24px;
+  opacity: 0.9;
+  letter-spacing: 1px;
+}
+
+.story-content button {
+  margin-top: 30px;
+  background: #333;
+  border: 1px solid #666;
+  color: #fff;
+  padding: 12px 24px;
+  font-family: inherit;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.story-content button:hover {
+  background: #555;
+  transform: scale(1.05);
 }

@@ -6,6 +6,36 @@ import { BasementDoor } from './interactive.js';
 import { createDirectionalLight, createPointLight } from './light.js';
 import * as objs from './objects.js';
 import { GLTFLoader } from '../CS559-Three/examples/jsm/loaders/GLTFLoader.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+
+// Vignette Shader
+const VignetteShader = {
+  uniforms: {
+    "tDiffuse": { value: null },
+    "offset": { value: 1.0 },
+    "darkness": { value: 1.5 }
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+    }
+  `,
+  fragmentShader: `
+    uniform float offset;
+    uniform float darkness;
+    uniform sampler2D tDiffuse;
+    varying vec2 vUv;
+    void main() {
+      vec4 texel = texture2D( tDiffuse, vUv );
+      vec2 uv = ( vUv - 0.5 ) * vec2( offset );
+      gl_FragColor = vec4( mix( texel.rgb, vec3( 1.0 - darkness ), dot( uv, uv ) ), texel.a );
+    }
+  `
+};
 
 
 // Print Async Error messages to the console
@@ -70,6 +100,8 @@ const dom = {
   closeNoteBtn: document.getElementById('closeNoteBtn'),
   body: document.getElementById('body'),
   hint: document.getElementById('hint'),
+  storyPopup: document.getElementById('storyPopup'),
+  startBtn: document.getElementById('startBtn'),
 };
 
 
@@ -84,6 +116,7 @@ class Game {
     this.input = new Input(dom);
     this.collected = new Map(); // index -> value
     this.prototypeMode = !dom.fullModeCheckbox.checked;
+    this.gameStarted = false;
 
     // Setup Renderer with shadows enabled
     this.renderer = new T.WebGLRenderer({ antialias: true });
@@ -131,14 +164,16 @@ class Game {
     // Create sunlight
     const dirLight = createDirectionalLight(10, 15, 5, 0xffffff, 1.2)
     this.scene.add(dirLight);
+    this.dirLight = dirLight;
+    this.ambientLight = ambient;
 
     // Create ceiling lights as point lights
-    const ceilingLight1 = createPointLight(0, 2.5, 0, 0xffffff, 1.0, 25);
-    const ceilingLight2 = createPointLight(-6, 2.5, -6, 0xffffff, 0.8, 22);
-    const ceilingLight3 = createPointLight(6, 2.5, -6, 0xffffff, 0.8, 22);
-    this.scene.add(ceilingLight1);
-    this.scene.add(ceilingLight2);
-    this.scene.add(ceilingLight3);
+    this.ceilingLight1 = createPointLight(0, 2.5, 0, 0xffffff, 1.0, 25);
+    this.ceilingLight2 = createPointLight(-6, 2.5, -6, 0xffffff, 0.8, 22);
+    this.ceilingLight3 = createPointLight(6, 2.5, -6, 0xffffff, 0.8, 22);
+    this.scene.add(this.ceilingLight1);
+    this.scene.add(this.ceilingLight2);
+    this.scene.add(this.ceilingLight3);
 
     // Controls state
     this.yaw = 0;
@@ -173,14 +208,23 @@ class Game {
       this.hideNotePopup();
     });
 
-    
+    // Story Popup Start
+    dom.startBtn.addEventListener('click', () => {
+      dom.storyPopup.style.display = 'none';
+      this.gameStarted = true;
+      if (this.listener.context.state === 'suspended') {
+        this.listener.context.resume();
+      }
+    });
+
+
 
     this.resetWorld().catch(err => {
       console.error(err);
     });
 
     // Setup the Camera
-    
+
     this.camera = new T.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
     this.camera.position.set(0, CONFIG.player.height + 2, 0);
     this.camera.add(this.listener);
@@ -188,11 +232,22 @@ class Game {
       this.camera.aspect = window.innerWidth / window.innerHeight;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(window.innerWidth, window.innerHeight);
+      if (this.composer) {
+        this.composer.setSize(window.innerWidth, window.innerHeight);
+      }
     });
 
-    this.resetWorld().catch(err => {
-      console.error(err);
-    });
+    // Setup Post-Processing
+    this.composer = new EffectComposer(this.renderer);
+    const renderPass = new RenderPass(this.scene, this.camera);
+    this.composer.addPass(renderPass);
+
+    this.vignettePass = new ShaderPass(VignetteShader);
+    this.vignettePass.uniforms["offset"].value = 0.95;
+    this.vignettePass.uniforms["darkness"].value = 1.6;
+    this.composer.addPass(this.vignettePass);
+
+
 
     // Ensure AudioContext is resumed on user interaction
     const resumeAudio = () => {
@@ -233,26 +288,26 @@ class Game {
     dom.objective.textContent = 'Find 3 notes with password pieces to unlock the basement.';
 
     // Materials for house
-    const floorMat =        await loadTextureSafely('./src/textures/floor.jpg',     0x6b5b4f, this.prototypeMode);
-    const ceilingMat =      await loadTextureSafely('./src/textures/ceiling.jpg',   0x5a5a5a, this.prototypeMode);
-    const wallMat =         await loadTextureSafely('./src/textures/wall.jpg',      0x8b7d6b, this.prototypeMode);
-    const frameMat =        await loadTextureSafely('./src/textures/frame.jpg',     0xFF00FF, this.prototypeMode);
-    const doorMat =         await loadTextureSafely('./src/textures/door.jpg',      0x4a3a2a, this.prototypeMode);
-    const handleMat =       await loadTextureSafely('./src/textures/handle.jpg',    0xaaaaaa, this.prototypeMode)
-    const glassMat =        new T.MeshStandardMaterial({
+    const floorMat = await loadTextureSafely('./src/textures/floor.jpg', 0x6b5b4f, this.prototypeMode);
+    const ceilingMat = await loadTextureSafely('./src/textures/ceiling.jpg', 0x5a5a5a, this.prototypeMode);
+    const wallMat = await loadTextureSafely('./src/textures/wall.jpg', 0x8b7d6b, this.prototypeMode);
+    const frameMat = await loadTextureSafely('./src/textures/frame.jpg', 0xFF00FF, this.prototypeMode);
+    const doorMat = await loadTextureSafely('./src/textures/door.jpg', 0x4a3a2a, this.prototypeMode);
+    const handleMat = await loadTextureSafely('./src/textures/handle.jpg', 0xaaaaaa, this.prototypeMode)
+    const glassMat = new T.MeshStandardMaterial({
       color: 0x99bbee,
       transparent: true,
       opacity: 0.3,
       roughness: 0.1,
       metalness: 0.1
     });
-    const couchMat =        await loadTextureSafely('./src/textures/couch.jpg', 0x5a4a3a, this.prototypeMode);
-    const bookshelfMat =    await loadTextureSafely('./src/textures/bookshelf.jpg', 0xFF00FF, this.prototypeMode);
-    const drawerMat =       await loadTextureSafely('./src/textures/drawer.jpg',    0x991155, this.prototypeMode)
-    const noteMat =         await loadTextureSafely('./src/textures/note.jpg',      0xddddcc, this.prototypeMode);
-    const tableMat =        await loadTextureSafely('./src/textures/table.jpg',     0x111111, this.prototypeMode)
-    const groundMat =       await loadTextureSafely('./src/textures/ground.jpg',    0x97ff9e, this.prototypeMode);
-    
+    const couchMat = await loadTextureSafely('./src/textures/couch.jpg', 0x5a4a3a, this.prototypeMode);
+    const bookshelfMat = await loadTextureSafely('./src/textures/bookshelf.jpg', 0xFF00FF, this.prototypeMode);
+    const drawerMat = await loadTextureSafely('./src/textures/drawer.jpg', 0x991155, this.prototypeMode)
+    const noteMat = await loadTextureSafely('./src/textures/note.jpg', 0xddddcc, this.prototypeMode);
+    const tableMat = await loadTextureSafely('./src/textures/table.jpg', 0x111111, this.prototypeMode)
+    const groundMat = await loadTextureSafely('./src/textures/ground.jpg', 0x97ff9e, this.prototypeMode);
+
 
     // House dimensions
     const houseWidth = 20;
@@ -335,6 +390,48 @@ class Game {
     const skybox = new T.Mesh(skyGeometry, skyMaterial);
     skybox.renderOrder = -1000; // Render first
     this.scene.add(skybox);
+    this.skyMaterial = skyMaterial;
+
+    // Apply Mode Settings (Visuals)
+    if (this.prototypeMode) {
+      // Prototype Mode: Bright, Clear
+      this.ambientLight.intensity = 0.9;
+      this.dirLight.color.setHex(0xffffff);
+      this.dirLight.intensity = 1.2;
+      this.dirLight.position.set(10, 15, 5); // Sun position
+
+      this.ceilingLight1.intensity = 1.0;
+      this.ceilingLight2.intensity = 0.8;
+      this.ceilingLight3.intensity = 0.8;
+
+      // Skybox: Blue Day
+      this.skyMaterial.uniforms.topColor.value.setHex(0x87CEEB);
+      this.skyMaterial.uniforms.bottomColor.value.setHex(0xE0E0E0);
+
+      this.scene.fog = null;
+      if (this.vignettePass) this.vignettePass.enabled = false;
+
+    } else {
+      // Full Mode: Dark, Horror
+      this.ambientLight.intensity = 0.7; // Even Brighter ambient
+      this.dirLight.color.setHex(0x6666aa); // Moonlight blue
+      this.dirLight.intensity = 1.0;
+      this.dirLight.position.set(-10, 15, -5); // Moon position?
+
+      // Flicker/dim ceiling lights or just make them dimmer
+      this.ceilingLight1.intensity = 0.9;
+      this.ceilingLight2.intensity = 0.8;
+      this.ceilingLight3.intensity = 0.8;
+
+      // Skybox: Dark Night
+      this.skyMaterial.uniforms.topColor.value.setHex(0x000010); // Very dark blue/black
+      this.skyMaterial.uniforms.bottomColor.value.setHex(0x000000); // Black horizon
+
+      // Fog
+      this.scene.fog = new T.FogExp2(0x000000, 0.01); // Black fog, very light
+
+      if (this.vignettePass) this.vignettePass.enabled = true;
+    }
 
     // --- Evil Eye Implementation ---
     const useFullMode = dom.fullModeCheckbox.checked;
@@ -408,6 +505,15 @@ class Game {
   loop() {
     requestAnimationFrame(() => this.loop());
     const dt = Math.min(this.clock.getDelta(), 0.1); // Cap delta time for stability
+
+    if (!this.gameStarted) {
+      if (this.composer) {
+        this.composer.render();
+      } else {
+        this.renderer.render(this.scene, this.camera);
+      }
+      return;
+    }
 
     // Update interactables
     for (const u of this.updateables) {
@@ -576,12 +682,18 @@ class Game {
     // Apply position
     this.camera.position.copy(newPos);
 
-    this.renderer.render(this.scene, this.camera);
+    // this.renderer.render(this.scene, this.camera);
+    if (this.composer) {
+      this.composer.render();
+    } else {
+      this.renderer.render(this.scene, this.camera);
+    }
   }
 
   showOverlay(text) {
     dom.message.textContent = text;
     dom.overlay.classList.add('show');
+    document.exitPointerLock();
   }
 
   hideOverlay() {
