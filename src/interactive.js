@@ -1,5 +1,5 @@
 import * as THREE from '../CS559-Three/build/three.module.js';
-import { loadTextureSafely, createShineShader} from './load_texture.js'
+import { loadTextureSafely, createShineShader } from './load_texture.js'
 import { Door, Note, SlidingDrawer, Cabinet } from './objects.js';
 
 
@@ -26,18 +26,18 @@ export class Interactable extends THREE.Group {
  */
 // Interactable Note class that extends Interactable and uses NoteObject
 export class InteractiveNote extends Interactable {
-  constructor({ passwordPiece, content, material, position, passwordIndex, useShineShader = false, rotationY=0 }) {
+  constructor({ passwordPiece, content, material, position, passwordIndex, useShineShader = false, rotationY = 0 }) {
     super({
       label: 'Note',
       hint: 'Read Note (E)',
     });
-    
+
     this.passwordPiece = passwordPiece; // e.g., "12", "34", "56"
     this.passwordIndex = passwordIndex; // Position in password (0, 1, 2)
     this.content = content || `Password piece: ${passwordPiece}`;
     this.collected = false;
     this.bobOffset = Math.random() * Math.PI * 2; // Random starting phase for animation
-    
+
     // Create note using NoteObject class
     // Position at origin since the parent Interactable handles positioning
     const noteObject = new Note({
@@ -45,9 +45,9 @@ export class InteractiveNote extends Interactable {
       material,
       useShineShader
     });
-    
+
     this.add(noteObject);
-    
+
     // Store references to note components
     this.noteObject = noteObject;
     this.mesh = noteObject.mesh;
@@ -56,38 +56,38 @@ export class InteractiveNote extends Interactable {
     this.shineMaterial = noteObject.shineMaterial;
     this.baseMaterial = noteObject.baseMaterial;
     this.useShineShader = useShineShader;
-    
+
     if (position) {
       this.position.copy(position);
     }
     this.rotation.y = rotationY;
   }
-  
+
   update(dt) {
     if (!this.collected) {
       // Update shine shader time uniform if using shader
       if (this.shineMaterial && this.shineMaterial.uniforms) {
         this.shineMaterial.uniforms.time.value += dt;
       }
-      
+
       // Subtle floating/bobbing animation
       const bobSpeed = 1.5;
       const bobAmount = 0.1;
       this.bobOffset += dt * bobSpeed;
       const bobY = Math.sin(this.bobOffset) * bobAmount;
-      
+
       this.mesh.position.y = bobY;
       this.glow.position.y = bobY;
-      
+
       if (this.collider) {
         this.collider.position.y = bobY;
       }
-      
+
       // Gentle rotation (only rotate around Y axis, not the whole note)
       this.mesh.rotation.y = Math.PI + Math.sin(this.bobOffset * 0.5) * 0.2;
     }
   }
-  
+
   setShineShader(enabled) {
     if (this.collected) return; // Don't change collected notes
     this.noteObject.setShineShader(enabled);
@@ -100,18 +100,18 @@ export class InteractiveNote extends Interactable {
  * Door that can be opened and closed
  */
 export class InteractiveDoor extends Interactable {
-  constructor({ x=0, y=0, z=0, w=0.6, h=0.8, t=0.02, openAngle=Math.PI/2, frameMat, doorMat, handleMat, rotationY=0 }) {
+  constructor({ x = 0, y = 0, z = 0, w = 0.6, h = 0.8, t = 0.02, openAngle = Math.PI / 2, frameMat, doorMat, handleMat, rotationY = 0 }) {
     super({
       label: 'Door',
       hint: 'Open/Close (E)',
     });
-    
+
     this.openAngle = openAngle;
     this.open = false;
-    
+
     // Set position
     this.position.set(x, y, z);
-    
+
     // Create door using Door class
     // Position at origin since the parent Interactable handles positioning
     const door = new Door({
@@ -119,9 +119,9 @@ export class InteractiveDoor extends Interactable {
       w: w, h: h, t: t,
       frameMat, doorMat, handleMat, rotationY
     });
-    
+
     this.add(door);
-    
+
     // Store references to door components
     this.frame = door;
     this.hinge = door.hinge;
@@ -130,14 +130,14 @@ export class InteractiveDoor extends Interactable {
     this.frameTop = door.frameTop;
     this.frameRight = door.frameRight;
   }
-  
+
   onInteract() {
     this.open = !this.open;
   }
-  
+
   update(dt) {
     let target = 0;
-    if(this.open) {
+    if (this.open) {
       target = this.openAngle;
     }
     const curr = this.hinge.rotation.y;
@@ -150,13 +150,13 @@ export class InteractiveDoor extends Interactable {
  * Simple sliding drawer
  */
 export class InteractiveDrawer extends Interactable {
-  constructor({ x, y, z, w, h, d, extend=0.75, drawerMat, handleMat, rotationY=0 }) {
+  constructor({ x, y, z, w, h, d, extend = 0.75, drawerMat, handleMat, rotationY = 0 }) {
     super({ label: 'Drawer', hint: 'Open/Close (E)' });
     this.open = false;
     this.extend = extend;
     this.position.set(x, y, z);
 
-    const mesh = new SlidingDrawer({x:0, y:0, z:0, w, h, d, drawerMat, handleMat, rotationY});
+    const mesh = new SlidingDrawer({ x: 0, y: 0, z: 0, w, h, d, drawerMat, handleMat, rotationY });
     this.add(mesh);
     this.drawer = mesh.drawer;
   }
@@ -178,7 +178,7 @@ export class InteractiveDrawer extends Interactable {
 
   update(dt) {
     let target = 0;
-    if(this.open) {
+    if (this.open) {
       target = this.extend;
     }
     const curr = this.drawer.position.z;
@@ -189,14 +189,14 @@ export class InteractiveDrawer extends Interactable {
 
 
 export class InteractiveCabinet extends Interactable {
-  constructor({ x, y, z, w, h, d, cabinetMat, handleMat, rotationY=0, label = 'Cabinet Door', openAngle=5*Math.PI/12 }) {
+  constructor({ x, y, z, w, h, d, cabinetMat, handleMat, rotationY = 0, label = 'Cabinet Door', openAngle = 5 * Math.PI / 12 }) {
     super({ label, hint: 'Open/Close (E)' });
     this.position.set(x, y, z);
-    
+
     // Create the cabinet door
-    this.cabinet = new Cabinet({ x:0, y:0, z:0, w, h, d, cabinetMat, handleMat, rotationY });
+    this.cabinet = new Cabinet({ x: 0, y: 0, z: 0, w, h, d, cabinetMat, handleMat, rotationY });
     this.add(this.cabinet);
-    
+
     // Door state
     this.isOpen = false;
     this.openAngle = -openAngle;
@@ -204,7 +204,7 @@ export class InteractiveCabinet extends Interactable {
     this.animationSpeed = 3;
     this.hing = hint;
   }
-  
+
   onInteract() {
     this.isOpen = !this.isOpen;
     if (this.sound && this.sound.buffer) {
@@ -223,11 +223,11 @@ export class InteractiveCabinet extends Interactable {
 
 
   update(deltaTime) {
-    
+
     const targetAngle = this.isOpen ? this.openAngle : this.closedAngle;
     const currentAngle = this.cabinet.hinge.rotation.y;
     const angleDiff = targetAngle - currentAngle;
-    
+
     if (Math.abs(angleDiff) < 0.01) {
       // Close enough, snap to target
       this.cabinet.hinge.rotation.y = targetAngle;
@@ -257,12 +257,46 @@ export class Lock extends Interactable {
   }
   tryUnlock(foundValues) {
     // Require all four: indices 1..4
-    const allFound = [1,2,3,4].every(i => foundValues.has(i));
+    const allFound = [1, 2, 3, 4].every(i => foundValues.has(i));
     if (allFound) {
       this.unlocked = true;
       return true;
     }
     return false;
+  }
+}
+
+export class BasementDoor extends InteractiveDoor {
+  constructor(args) {
+    super(args);
+    this.label = 'Basement Door';
+    this.hint = 'Locked (Requires Password)';
+    this.isLocked = true;
+
+    // Add a temporary lock mesh
+    const lockGeom = new THREE.BoxGeometry(0.1, 0.15, 0.05);
+    const lockMat = new THREE.MeshStandardMaterial({ color: 0xFF0000 }); // Red for locked
+    this.lockMesh = new THREE.Mesh(lockGeom, lockMat);
+    // Position on the handle
+    this.lockMesh.position.set(args.w - 0.2, 0, 0.05);
+    this.door.add(this.lockMesh);
+  }
+
+  unlock() {
+    this.isLocked = false;
+    this.hint = 'Open/Close (E)';
+    if (this.lockMesh) {
+      this.door.remove(this.lockMesh);
+      this.lockMesh = null;
+    }
+  }
+
+  onInteract() {
+    if (this.isLocked) {
+      // Maybe play a sound or shake
+      return;
+    }
+    super.onInteract();
   }
 }
 
