@@ -502,7 +502,7 @@ export function createDiningRoom(h, t, wallMat, tableMat, doorW, doorH) {
   obstacles.push(passage1, passage2);
 
   const table = new Table({
-    x: 7, y: 0, z: -2, w: 2, h: 1, d: 3,
+    x: 7, y: 0, z: -1, w: 2, h: 1, d: 3,
     mat: tableMat
   })
   objects.push(table);
